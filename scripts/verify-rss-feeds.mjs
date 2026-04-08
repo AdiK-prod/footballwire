@@ -4,8 +4,6 @@ const parser = new Parser();
 
 const feeds = [
   "https://www.espn.com/espn/rss/nfl/news",
-  "https://www.nfl.com/rss/rsslanding",
-  "https://apnews.com/apf-sports",
   "https://profootballtalk.nbcsports.com/feed/",
   "https://theathletic.com/rss/nfl",
 ];

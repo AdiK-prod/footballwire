@@ -1,4 +1,4 @@
-const env = import.meta.env;
+const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
 
 export const config = {
   supabaseUrl: env.VITE_SUPABASE_URL ?? "",
@@ -16,4 +16,7 @@ export const config = {
   resendFrom:
     (globalThis as { process?: { env?: Record<string, string | undefined> } })
       .process?.env?.RESEND_FROM ?? "",
+  adminAlertEmail:
+    (globalThis as { process?: { env?: Record<string, string | undefined> } })
+      .process?.env?.ADMIN_ALERT_EMAIL ?? "",
 } as const;
