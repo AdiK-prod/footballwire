@@ -180,7 +180,7 @@ CREATE INDEX idx_pipeline_runs_team ON pipeline_runs(team_id, run_at);
 
 | Type | team_id | Example | Validation | Article filtering |
 |---|---|---|---|---|
-| **General** | NULL | ESPN, NFL.com, AP Sports | Pre-approved — no validation needed | Filter at article level by team relevance |
+| **General** | NULL | ESPN, Pro Football Talk, The Athletic NFL | Pre-approved — no validation needed | Filter at article level by team relevance |
 | **Team-specific** | set | SeahawksWire.com, beat reporters | Full validation pipeline | Assumed relevant at source level, verified at article level |
 | **User-submitted** | set | Fan blogs, local papers | Full validation pipeline | Same as team-specific |
 
@@ -195,8 +195,6 @@ RSS feeds are parsed using `rss-parser` npm package. The pipeline:
 
 Seed list:
 - ESPN NFL (`https://www.espn.com/espn/rss/nfl/news`)
-- NFL.com (`https://www.nfl.com/rss/rsslanding`)
-- AP Sports NFL (`https://apnews.com/apf-sports`)
 - Pro Football Talk (`https://profootballtalk.nbcsports.com/feed/`)
 - The Athletic NFL (`https://theathletic.com/rss/nfl`)
 
