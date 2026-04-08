@@ -7,18 +7,16 @@ type ConferenceFilter = "All" | "AFC" | "NFC";
 
 const conferenceFilters: ConferenceFilter[] = ["All", "AFC", "NFC"];
 
-const getContrastTextColor = (hexColor: string) => {
-  const normalized = hexColor.replace("#", "");
-  if (normalized.length !== 6) {
-    return "#ffffff";
+const isLightColor = (hexColor?: string) => {
+  if (!hexColor || hexColor.length !== 7 || !hexColor.startsWith("#")) {
+    return false;
   }
 
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  const r = Number.parseInt(hexColor.slice(1, 3), 16);
+  const g = Number.parseInt(hexColor.slice(3, 5), 16);
+  const b = Number.parseInt(hexColor.slice(5, 7), 16);
 
-  return luminance > 180 ? "#111111" : "#ffffff";
+  return (r * 299 + g * 587 + b * 114) / 1000 > 160;
 };
 
 export const App = () => {
@@ -92,23 +90,26 @@ export const App = () => {
 
   return (
     <main className="min-h-screen bg-fw-white">
-      <div className="border-b border-fw-border bg-fw-white px-8 py-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <p className="text-sm font-bold uppercase tracking-[2px] text-fw-ink">
-            FOOTBALL WIRE
+      <nav className="w-full border-b border-fw-border bg-fw-white">
+        <div className="mx-auto flex w-full max-w-[860px] items-center justify-between px-4 py-3 sm:px-8 sm:py-4">
+          <p className="text-[14px] font-bold uppercase tracking-[2px] text-fw-ink">
+            Football Wire
           </p>
-          <p className="text-xs text-fw-ink-faint">Free · Daily · 5 min</p>
+          <p className="text-[11px] text-fw-ink-faint">Free · Daily · 5 min</p>
         </div>
-      </div>
+      </nav>
 
-      <div className="mx-auto max-w-4xl space-y-8 px-8 py-10">
-        <section className="space-y-4">
-          <p className="text-[9px] font-semibold uppercase tracking-[2.5px] text-fw-ink-muted">
-            <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-fw-ink-muted" />
-            DAILY TEAM BRIEFING
+      <div className="mx-auto w-full max-w-[860px] space-y-8 px-4 sm:px-8">
+        <section className="space-y-4 pb-10 pt-12 text-left">
+          <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[2.5px] text-fw-ink-muted">
+            <span
+              className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full transition-colors duration-300"
+              style={{ backgroundColor: selectedTeam?.primary_color ?? "#888888" }}
+            />
+            Daily team briefing
           </p>
 
-          <h1 className="text-[32px] font-bold leading-tight tracking-[-0.5px] text-fw-ink">
+          <h1 className="text-[clamp(38px,5vw,52px)] font-bold leading-[1.05] tracking-[-0.5px] text-fw-ink">
             <span className="block">Everything that matters.</span>
             <span
               className={`block ${
@@ -118,19 +119,19 @@ export const App = () => {
                 selectedTeam ? { color: selectedTeam.primary_color } : undefined
               }
             >
-              {selectedTeam ? `${selectedTeam.city} ${selectedTeam.name}` : "Pick your team."}
+              {selectedTeam ? `${selectedTeam.city} ${selectedTeam.name}.` : "Pick your team."}
             </span>
           </h1>
 
-          <p className="text-base font-light leading-relaxed text-fw-ink-mid">
+          <p className="text-base font-normal leading-[1.7] text-fw-ink-mid">
             One newsletter. Your team. Every morning.
           </p>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="mb-7 flex flex-wrap gap-1.5">
             {["Top Stories", "Injuries", "Stat of the Day"].map((chip) => (
               <span
                 key={chip}
-                className="rounded-full border border-fw-border-mid bg-fw-card px-3 py-1 text-[10px] font-medium text-fw-ink-muted"
+                className="rounded-full border border-fw-border-mid bg-fw-card px-3 py-[5px] text-[11px] font-medium text-fw-ink-muted"
               >
                 {chip}
               </span>
@@ -139,21 +140,27 @@ export const App = () => {
         </section>
 
         <section className="space-y-4">
-          <div className="inline-flex gap-0.5 rounded-lg border border-fw-border-mid bg-fw-white p-1">
-            {conferenceFilters.map((filter) => (
-              <button
-                type="button"
-                key={filter}
-                onClick={() => setConferenceFilter(filter)}
-                className={`rounded-md px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[1px] ${
-                  conferenceFilter === filter
-                    ? "bg-fw-tab-active text-fw-ink"
-                    : "text-fw-ink-muted"
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
+          <div className="mb-[14px] flex items-center justify-between">
+            <div className="inline-flex gap-0.5 rounded-lg border border-fw-border-mid bg-fw-white p-[3px]">
+              {conferenceFilters.map((filter) => {
+                const isActive = conferenceFilter === filter;
+                return (
+                  <button
+                    type="button"
+                    key={filter}
+                    onClick={() => setConferenceFilter(filter)}
+                    className="px-4 py-[7px] text-[11px] font-semibold uppercase tracking-[1.5px] transition-colors duration-150"
+                    style={{
+                      borderRadius: "5px",
+                      backgroundColor: isActive ? "#e8e8e8" : "transparent",
+                      color: isActive ? "#111111" : "#888888",
+                    }}
+                  >
+                    {filter}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {isLoadingTeams ? (
@@ -166,14 +173,14 @@ export const App = () => {
           ) : null}
 
           {!isLoadingTeams && !teamLoadError ? (
-            <div className="space-y-5">
+            <div className="space-y-0">
               {Object.entries(groupedTeams).map(([division, divisionTeams]) => (
-                <div key={division}>
-                  <h2 className="mb-2 mt-4 text-[9px] font-semibold uppercase tracking-[2px] text-fw-ink-faint">
+                <div key={division} className="mb-6">
+                  <h2 className="mb-2 mt-5 pl-[2px] text-[11px] font-semibold uppercase tracking-[2px] text-fw-ink-faint">
                     {division}
                   </h2>
 
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid w-full grid-cols-2 gap-2 md:grid-cols-4">
                     {divisionTeams.map((team) => {
                       const isSelected = selectedTeam?.id === team.id;
                       return (
@@ -181,35 +188,73 @@ export const App = () => {
                           type="button"
                           key={team.id}
                           onClick={() => setSelectedTeam(team)}
-                          className={`group relative overflow-hidden rounded-[10px] border-[1.5px] bg-fw-card p-3.5 text-center transition-all duration-200 ${
-                            isSelected
-                              ? "bg-fw-white"
-                              : "border-fw-border hover:-translate-y-[2px] hover:border-fw-border-mid"
+                          className={`relative overflow-hidden rounded-[10px] border-[1.5px] p-[12px_8px_10px] text-center transition-all duration-200 ${
+                            isSelected ? "bg-fw-white" : "bg-fw-card"
                           }`}
-                          style={isSelected ? { borderColor: team.primary_color } : undefined}
+                          style={{
+                            borderColor: isSelected
+                              ? team.primary_color
+                              : `${team.primary_color}55`,
+                            transform: "translateY(0)",
+                          }}
+                          onMouseEnter={(event) => {
+                            const current = event.currentTarget;
+                            current.style.transform = "translateY(-2px)";
+                            current.style.borderColor = team.primary_color;
+                            const strip = current.querySelector(".strip") as HTMLDivElement | null;
+                            if (strip) {
+                              strip.style.opacity = "1";
+                            }
+                          }}
+                          onMouseLeave={(event) => {
+                            const current = event.currentTarget;
+                            current.style.transform = "translateY(0)";
+                            current.style.borderColor = isSelected
+                              ? team.primary_color
+                              : `${team.primary_color}55`;
+                            const strip = current.querySelector(".strip") as HTMLDivElement | null;
+                            if (strip) {
+                              strip.style.opacity = isSelected ? "1" : "0.4";
+                            }
+                          }}
                         >
                           <div
-                            className={`absolute left-0 top-0 h-[3px] w-full origin-left bg-transparent transition-transform duration-200 ${
-                              isSelected ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
-                            }`}
-                            style={{ backgroundColor: team.primary_color }}
+                            className="strip absolute left-0 top-0 h-[3px] w-full"
+                            style={{
+                              backgroundColor: team.primary_color,
+                              opacity: isSelected ? 1 : 0.4,
+                              transition: "opacity 0.2s ease",
+                            }}
                           />
 
-                          <div
-                            className={`absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full text-white transition-all duration-200 ${
-                              isSelected ? "scale-100 opacity-100" : "scale-50 opacity-0"
-                            }`}
-                            style={{ backgroundColor: team.primary_color }}
-                            aria-hidden={!isSelected}
-                          >
-                            <svg viewBox="0 0 20 20" className="h-2.5 w-2.5 fill-current">
-                              <path d="M7.6 13.2 4.8 10.4l-1.4 1.4 4.2 4.2 9-9-1.4-1.4z" />
-                            </svg>
-                          </div>
+                          {isSelected ? (
+                            <div
+                              className="absolute right-[7px] top-[7px] flex h-4 w-4 items-center justify-center rounded-full"
+                              style={{ backgroundColor: team.primary_color }}
+                            >
+                              <svg
+                                width="8"
+                                height="8"
+                                viewBox="0 0 8 8"
+                                fill="none"
+                                aria-hidden
+                              >
+                                <path
+                                  d="M1.5 4l2 2L6.5 2"
+                                  stroke="white"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </div>
+                          ) : null}
 
-                          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-fw-tab-active">
+                          <div
+                            className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-lg"
+                            style={{ backgroundColor: `${team.primary_color}18` }}
+                          >
                             <span
-                              className="text-[10px] font-bold"
+                              className="text-[11px] font-bold tracking-[0.3px]"
                               style={{ color: team.primary_color }}
                             >
                               {team.abbreviation}
@@ -217,11 +262,8 @@ export const App = () => {
                           </div>
 
                           <p
-                            className={`text-[10.5px] leading-snug ${
-                              isSelected
-                                ? "font-medium text-fw-ink-mid"
-                                : "font-normal text-fw-ink-muted"
-                            }`}
+                            className="text-[11px] font-normal leading-[1.3] break-words"
+                            style={{ color: isSelected ? "#444444" : "#888888" }}
                           >
                             {team.city} {team.name}
                           </p>
@@ -237,35 +279,56 @@ export const App = () => {
 
         {!isSuccess ? (
           <section
-            className={`rounded-xl border-[1.5px] border-l-4 border-fw-border-mid bg-fw-card p-6 transition-all duration-500 ${
+            className={`mt-5 w-full rounded-xl border-[1.5px] border-fw-border-mid bg-fw-card p-6 transition-all duration-500 ${
               selectedTeam
                 ? "translate-y-0 opacity-100"
-                : "pointer-events-none translate-y-4 opacity-0"
+                : "pointer-events-none translate-y-5 opacity-0"
             }`}
-            style={selectedTeam ? { borderLeftColor: selectedTeam.primary_color } : undefined}
+            style={
+              selectedTeam
+                ? { borderLeft: `4px solid ${selectedTeam.primary_color}` }
+                : { borderLeft: "4px solid #d4d4d4" }
+            }
           >
-            <h2 className="text-lg font-bold text-fw-ink">
-              Subscribe to{" "}
+            <h2 className="mb-1 text-[20px] font-bold text-fw-ink">
+              Get{" "}
               <span style={selectedTeam ? { color: selectedTeam.primary_color } : undefined}>
-                {selectedTeam ? `${selectedTeam.city} ${selectedTeam.name}` : "your team"}
-              </span>
+                {selectedTeam?.name ?? "your team"}
+              </span>{" "}
+              Wire
             </h2>
-            <p className="mb-4 text-xs font-light text-fw-ink-muted">
-              Enter your email to receive daily updates.
+            <p className="mb-[18px] text-[13px] font-light text-fw-ink-muted">
+              Delivered every morning before you start your day.
             </p>
 
             <form className="space-y-3" onSubmit={handleSubscribe}>
-              <label className="block text-sm font-medium text-fw-ink-mid">
-                Email address
+              <div className="flex gap-2">
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  className="mt-1 w-full rounded-lg border border-fw-border bg-fw-input-bg px-4 py-3 text-sm text-fw-ink placeholder:text-fw-ink-faint focus:border-fw-border-mid focus:outline-none"
+                  placeholder="your@email.com"
+                  className="flex-1 rounded-lg border border-fw-border bg-fw-input-bg px-4 py-3 text-[14px] text-fw-ink placeholder:text-fw-ink-faint focus:border-fw-border-mid focus:outline-none"
                 />
-              </label>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !selectedTeam}
+                  className="whitespace-nowrap rounded-lg px-6 py-3 text-[12px] font-bold uppercase tracking-[1px] disabled:opacity-60"
+                  style={
+                    selectedTeam
+                      ? {
+                          backgroundColor: selectedTeam.primary_color,
+                          color: isLightColor(selectedTeam.primary_color) ? "#111111" : "#ffffff",
+                        }
+                      : undefined
+                  }
+                >
+                  {isSubmitting
+                    ? "Submitting..."
+                    : `Get ${selectedTeam?.abbreviation ?? ""} Wire`}
+                </button>
+              </div>
 
               {submitError ? (
                 <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">
@@ -273,23 +336,7 @@ export const App = () => {
                 </p>
               ) : null}
 
-              <button
-                type="submit"
-                disabled={isSubmitting || !selectedTeam}
-                className="rounded-lg px-6 py-3 text-[11px] font-bold uppercase tracking-[1px] disabled:opacity-60"
-                style={
-                  selectedTeam
-                    ? {
-                        backgroundColor: selectedTeam.primary_color,
-                        color: getContrastTextColor(selectedTeam.primary_color),
-                      }
-                    : undefined
-                }
-              >
-                {isSubmitting ? "Subscribing..." : "Subscribe"}
-              </button>
-
-              <p className="mt-2.5 text-[10px] text-fw-ink-faint">
+              <p className="text-[11px] text-fw-ink-faint">
                 Free forever · No spam · Unsubscribe anytime
               </p>
             </form>
@@ -304,14 +351,16 @@ export const App = () => {
             </p>
           </section>
         ) : null}
+      </div>
 
-        <footer className="mt-12 flex items-center justify-between border-t border-fw-border pt-8">
-          <p className="text-[11px] font-bold uppercase tracking-[3px] text-fw-ink-faint">
-            FOOTBALL WIRE
+      <footer className="mt-12 w-full border-t border-fw-border">
+        <div className="mx-auto flex w-full max-w-[860px] items-center justify-between px-4 py-3 sm:px-8 sm:py-7">
+          <p className="text-[12px] font-bold uppercase tracking-[3px] text-fw-ink-faint">
+            Football Wire
           </p>
           <p className="text-[11px] text-fw-ink-faint">© 2025 · Built for fans</p>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </main>
   );
 };

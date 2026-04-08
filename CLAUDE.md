@@ -187,6 +187,7 @@ to true per-article 4-dimension Claude API scoring.
 - **Focused diffs only** — do not expand scope beyond current phase tasks
 - **No drive-by refactors** — do not edit files unrelated to the current task
 - **No doc edits** — do not modify CLAUDE.md, BACKLOG.md, or prd_v2.md unless explicitly asked
+- **Fix obvious bugs autonomously** — if you discover a display bug, data mapping error, or missing field while completing a task, fix it without asking. Only stop if the fix requires a schema migration, external dependency, or architectural decision. Example: wrong field used for display → fix it and move on.
 - **Vertical slice rule** — if a feature writes to DB, the migration + pipeline write + admin UI ship together. Never build a UI that displays data the pipeline isn't writing yet
 - After any pipeline change confirm with SQL:
   `SELECT COUNT(*) FROM pipeline_runs` and `SELECT COUNT(*) FROM article_scores_log`
