@@ -59,7 +59,7 @@ export const POST = async (request: Request) => {
     return json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Unexpected server error",
+        error: "Source validation failed.",
       },
       500,
     );

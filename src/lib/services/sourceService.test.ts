@@ -27,6 +27,17 @@ describe("validateSourceInput", () => {
       }),
     ).toThrow();
   });
+
+  it("requires teamId for non-general source types", () => {
+    expect(() =>
+      validateSourceInput({
+        url: "https://example.com/feed.xml",
+        teamId: null,
+        sourceType: "team_specific",
+        submittedBy: "qa@test.local",
+      }),
+    ).toThrow();
+  });
 });
 
 describe("resolveStatusFromConfidence", () => {

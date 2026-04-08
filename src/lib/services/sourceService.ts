@@ -12,12 +12,22 @@ import { notifyAdminOfFlaggedSource } from "@/lib/services/adminNotificationServ
 
 const parser = new Parser();
 
-const validateSourceInputSchema = z.object({
-  url: z.string().url(),
-  teamId: z.number().int().positive().nullable(),
-  sourceType: z.enum(["general", "team_specific", "user_submitted"]),
-  submittedBy: z.string().min(1).default("system"),
-});
+const validateSourceInputSchema = z
+  .object({
+    url: z.string().url(),
+    teamId: z.number().int().positive().nullable(),
+    sourceType: z.enum(["general", "team_specific", "user_submitted"]),
+    submittedBy: z.string().min(1).default("system"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.sourceType !== "general" && value.teamId === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "teamId is required for team_specific and user_submitted sources.",
+        path: ["teamId"],
+      });
+    }
+  });
 
 type ValidateSourceInput = z.infer<typeof validateSourceInputSchema>;
 
