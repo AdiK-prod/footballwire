@@ -5,7 +5,7 @@ import { config } from "@/lib/config";
 export const getServiceRoleClient = (): SupabaseClient => {
   if (!config.supabaseUrl || !config.supabaseServiceRoleKey) {
     throw new Error(
-      "Missing VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for server-side Supabase.",
+      "Missing Supabase URL or service role key. Set VITE_SUPABASE_URL or SUPABASE_URL, and SUPABASE_SERVICE_ROLE_KEY (Vercel env for API routes).",
     );
   }
 
