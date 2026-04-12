@@ -1,48 +1,13 @@
-import { authorizeCronRequest } from "@/lib/cron/authorizeCronRequest";
-import { runDailyPipeline } from "@/lib/pipeline/runDailyPipeline";
+import { handleCronRunPipelineRequest } from "@/lib/cron/cronRunPipelineHttp";
 
 /**
- * Pipeline cron entrypoint — runs full daily pipeline (Phase 3).
+ * Test / future Next-style entry. **Production Vercel** uses root `api/cron/run-pipeline.ts`
+ * (Vite does not ship `app/api` to serverless).
  *
- * **Schedule:** `vercel.json` runs this route on a cron schedule. Times are **UTC**
- * (`0 6 * * *` = 06:00 UTC daily). Change the cron expression if you need local 6 AM
- * in a specific timezone.
- *
- * **Auth:** `Authorization: Bearer <CRON_SECRET>` — set `CRON_SECRET` in Vercel
- * (and locally for manual runs). Alias: `VERCEL_CRON_SECRET` in `getCronSecret()`.
- *
- * Vercel invokes scheduled jobs with **GET**; **POST** is supported for manual triggers.
+ * **Schedule:** `vercel.json` — cron path `/api/cron/run-pipeline`. Times **UTC**.
+ * **Auth:** `Authorization: Bearer <CRON_SECRET>`.
  */
 
-const json = (body: unknown, status: number) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "content-type": "application/json",
-    },
-  });
+export const GET = (request: Request) => handleCronRunPipelineRequest(request);
 
-const handleAuthorized = async () => {
-  await runDailyPipeline();
-  return json(
-    {
-      ok: true,
-      message: "Daily pipeline finished.",
-    },
-    200,
-  );
-};
-
-export const GET = async (request: Request) => {
-  if (!authorizeCronRequest(request)) {
-    return json({ ok: false, error: "Unauthorized" }, 401);
-  }
-  return handleAuthorized();
-};
-
-export const POST = async (request: Request) => {
-  if (!authorizeCronRequest(request)) {
-    return json({ ok: false, error: "Unauthorized" }, 401);
-  }
-  return handleAuthorized();
-};
+export const POST = (request: Request) => handleCronRunPipelineRequest(request);
