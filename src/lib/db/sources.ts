@@ -1,5 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-import { config } from "@/lib/config";
+import { getServiceRoleClient } from "@/lib/supabase/server";
 
 export type SourceStatus = "pending" | "approved" | "rejected" | "flagged";
 export type SourceType = "general" | "team_specific" | "user_submitted";
@@ -14,21 +13,13 @@ export type SourceRecord = {
   relevance_score: number | null;
 };
 
-const getServerSupabase = () => {
-  if (!config.supabaseUrl || !config.supabaseServiceRoleKey) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_URL");
-  }
-
-  return createClient(config.supabaseUrl, config.supabaseServiceRoleKey);
-};
-
 export const createPendingSource = async (params: {
   url: string;
   teamId: number | null;
   type: SourceType;
   submittedBy: string;
 }) => {
-  const supabase = getServerSupabase();
+  const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase
     .from("sources")
@@ -57,7 +48,7 @@ export const updateSourceStatus = async (params: {
   relevanceScore: number | null;
   validationNotes: string;
 }) => {
-  const supabase = getServerSupabase();
+  const supabase = getServiceRoleClient();
 
   const { error } = await supabase
     .from("sources")
@@ -74,7 +65,7 @@ export const updateSourceStatus = async (params: {
 };
 
 export const getTeamNameById = async (teamId: number) => {
-  const supabase = getServerSupabase();
+  const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase
     .from("teams")

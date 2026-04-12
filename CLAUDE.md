@@ -58,6 +58,7 @@ Move completed tasks to the Completed section in BACKLOG.md.
 - Stylistic or naming decisions already covered by rules in this file
 - Test failures that are fixable — fix and continue
 - Decisions already answered by CLAUDE.md or prd_v2.md
+- Display bugs discovered mid-task — fix them and continue
 
 ---
 
@@ -171,6 +172,45 @@ to true per-article 4-dimension Claude API scoring.
 
 ---
 
+## Design Compliance
+
+Design is a hard requirement — not optional context. Every UI component
+must match the design system defined in prd_v2.md before a task is
+considered complete.
+
+**Token rules — apply exactly:**
+- Page background: `#ffffff` — always pure white
+- Card / surface background: `#f2f2f0` — never pure white for cards
+- Active tab fill: `#e8e8e8` — never black, never dark
+- Input background: `#fbfbfb`, border: `#e8e8e8`
+- Primary text: `#111111`, muted: `#888888`, faint: `#bbbbbb`
+- All team colors from DB — never hardcoded
+
+**Team name display — always:**
+- Full name = `${team.city} ${team.name}` everywhere in the UI
+- Examples: "Buffalo Bills", "Kansas City Chiefs", "New England Patriots"
+- Never city only, never nickname only
+
+**Interactive states — all must be implemented:**
+- Hover: defined and visible
+- Selected / active: defined and visible
+- Focus: defined for all form inputs
+- A component with only a default state is incomplete
+
+**Before marking any UI task complete, verify:**
+- [ ] Colors match design tokens exactly
+- [ ] Team names show full city + name
+- [ ] All interactive states implemented
+- [ ] DM Sans font applied
+- [ ] No hardcoded team colors anywhere
+
+**Fix obvious display bugs autonomously:**
+If you discover a display bug, wrong field, missing state, or color mismatch
+while completing a task — fix it without asking. Only stop if the fix
+requires a schema migration, external dependency, or architectural decision.
+
+---
+
 ## Naming Conventions
 
 - Components: PascalCase (e.g. SubscriberCard.tsx)
@@ -187,7 +227,6 @@ to true per-article 4-dimension Claude API scoring.
 - **Focused diffs only** — do not expand scope beyond current phase tasks
 - **No drive-by refactors** — do not edit files unrelated to the current task
 - **No doc edits** — do not modify CLAUDE.md, BACKLOG.md, or prd_v2.md unless explicitly asked
-- **Fix obvious bugs autonomously** — if you discover a display bug, data mapping error, or missing field while completing a task, fix it without asking. Only stop if the fix requires a schema migration, external dependency, or architectural decision. Example: wrong field used for display → fix it and move on.
 - **Vertical slice rule** — if a feature writes to DB, the migration + pipeline write + admin UI ship together. Never build a UI that displays data the pipeline isn't writing yet
 - After any pipeline change confirm with SQL:
   `SELECT COUNT(*) FROM pipeline_runs` and `SELECT COUNT(*) FROM article_scores_log`

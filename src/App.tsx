@@ -123,7 +123,7 @@ export const App = () => {
             </span>
           </h1>
 
-          <p className="text-base font-normal leading-[1.7] text-fw-ink-mid">
+          <p className="text-[16px] font-normal leading-[1.7] text-fw-ink-mid">
             One newsletter. Your team. Every morning.
           </p>
 
@@ -131,7 +131,7 @@ export const App = () => {
             {["Top Stories", "Injuries", "Stat of the Day"].map((chip) => (
               <span
                 key={chip}
-                className="rounded-full border border-fw-border-mid bg-fw-card px-3 py-[5px] text-[11px] font-medium text-fw-ink-muted"
+                className="rounded-full border border-fw-border-mid bg-fw-card px-3 py-[5px] text-[12px] font-medium text-fw-ink-muted"
               >
                 {chip}
               </span>
@@ -149,7 +149,7 @@ export const App = () => {
                     type="button"
                     key={filter}
                     onClick={() => setConferenceFilter(filter)}
-                    className="px-4 py-[7px] text-[11px] font-semibold uppercase tracking-[1.5px] transition-colors duration-150"
+                    className="px-4 py-[7px] text-[12px] font-semibold uppercase tracking-[1.5px] transition-colors duration-150"
                     style={{
                       borderRadius: "5px",
                       backgroundColor: isActive ? "#e8e8e8" : "transparent",
@@ -188,7 +188,7 @@ export const App = () => {
                           type="button"
                           key={team.id}
                           onClick={() => setSelectedTeam(team)}
-                          className={`relative overflow-hidden rounded-[10px] border-[1.5px] p-[12px_8px_10px] text-center transition-all duration-200 ${
+                          className={`relative overflow-hidden rounded-[10px] border-[1.5px] p-[16px_10px_14px] text-center transition-all duration-200 ${
                             isSelected ? "bg-fw-white" : "bg-fw-card"
                           }`}
                           style={{
@@ -250,11 +250,11 @@ export const App = () => {
                           ) : null}
 
                           <div
-                            className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-lg"
+                            className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg"
                             style={{ backgroundColor: `${team.primary_color}18` }}
                           >
                             <span
-                              className="text-[11px] font-bold tracking-[0.3px]"
+                              className="text-[12px] font-bold tracking-[0.3px]"
                               style={{ color: team.primary_color }}
                             >
                               {team.abbreviation}
@@ -262,7 +262,7 @@ export const App = () => {
                           </div>
 
                           <p
-                            className="text-[11px] font-normal leading-[1.3] break-words"
+                            className="text-[13px] font-normal leading-[1.3] break-words"
                             style={{ color: isSelected ? "#444444" : "#888888" }}
                           >
                             {team.city} {team.name}

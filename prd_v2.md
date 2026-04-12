@@ -437,6 +437,21 @@ One unified system across subscriber app and admin dashboard.
 
 **Newsletter email** retains separate editorial design — unaffected by this system.
 
+**Design Compliance — Non-Negotiable**
+Design is not optional and not a stretch goal. Every UI phase has design
+compliance checkboxes in its DoD. A phase is not complete until all design
+checkboxes pass. Cursor must verify design compliance before reporting a
+phase as done.
+
+Rules that apply to every UI component built:
+- Team names always displayed as `city + " " + name` — never city or name alone
+- Active tabs always `#e8e8e8` grey fill — never black, never dark
+- Card backgrounds always `#f2f2f0` off-white — never pure white for card surfaces
+- Page/panel backgrounds always `#ffffff` pure white
+- All team colors sourced from DB — never hardcoded in code
+- All hover, selected, active, focus states must be implemented — not just default state
+- DM Sans font applied globally — no fallback to system sans-serif
+
 ---
 
 ## Development Phases
@@ -450,12 +465,22 @@ One unified system across subscriber app and admin dashboard.
 - Vercel deployment + BACKLOG.md initialized
 
 **Definition of Done:**
-- [ ] App runs locally on npm run dev
-- [ ] All 32 teams in Supabase with correct colors
-- [ ] All general sources seeded and approved
-- [ ] All DB indexes created
-- [ ] Vercel deploys on push to main
-- [ ] BACKLOG.md in repo with Phase 2 tasks listed
+- [x] App runs locally on npm run dev
+- [x] All 32 teams in Supabase with correct colors — including city, name, abbreviation, primary_color
+- [x] All general sources seeded and approved
+- [x] All DB indexes created
+- [x] Vercel deploys on push to main
+- [x] BACKLOG.md in repo with Phase 2 tasks listed
+- [x] DM Sans font loaded and applied as default across all pages
+- [x] Tailwind design tokens configured: fw-white, fw-card, fw-tab-active, fw-input-bg, fw-ink, fw-ink-mid, fw-ink-muted, fw-ink-faint, fw-border, fw-border-mid
+- [x] Subscriber landing page background is pure white `#ffffff`
+- [x] Team cards display full name as `city + " " + name` (e.g. "Buffalo Bills") everywhere
+- [x] Team cards background is `#f2f2f0` off-white, not white
+- [x] Conference filter tabs: active state is `#e8e8e8` grey fill — NOT black or dark
+- [x] All interactive states implemented: card hover (lift + border), selected (white bg + team color border + checkmark badge)
+- [x] No "Selected" text label on cards — checkmark badge only
+- [x] Signup box hidden before team selection, animates in after
+- [x] Signup box has 4px team primary_color left border
 
 ---
 
@@ -468,11 +493,13 @@ One unified system across subscriber app and admin dashboard.
 - Source type differentiation (general | team_specific | user_submitted)
 
 **Definition of Done:**
-- [ ] Valid team-specific URL → approved in DB
-- [ ] Unreachable URL → rejected with reason
-- [ ] Non-team URL confidence < 60 → flagged, admin notified
-- [ ] General sources never go through validation
-- [ ] source.type correctly set on all records
+- [x] Valid team-specific URL → approved in DB
+- [x] Unreachable URL → rejected with reason
+- [x] Non-team URL confidence < 60 → flagged, admin notified
+- [x] General sources never go through validation
+- [x] source.type correctly set on all records
+- [x] Any UI built in this phase matches design system tokens exactly
+- [x] Team names displayed as city + name wherever shown
 
 ---
 
@@ -504,6 +531,7 @@ One unified system across subscriber app and admin dashboard.
 - [ ] pipeline_runs row closed with completed or failed
 - [ ] One team failure does not block others
 - [ ] New team activates automatically on first subscriber
+- [ ] No UI built in this phase — pipeline only, no visual output to verify
 
 ---
 
@@ -549,6 +577,9 @@ One unified system across subscriber app and admin dashboard.
 - [ ] 👍/👎 writes to newsletter_metrics
 - [ ] Unsubscribe sets is_active = false instantly
 - [ ] Admin notified when failure rate > 10%
+- [ ] Email template uses team primary_color dynamically — never hardcoded
+- [ ] All five sections render correctly with real content
+- [ ] Empty sections omitted — no blank blocks in email
 
 ---
 
@@ -593,6 +624,15 @@ Note: Phase 7 upgrades this tab to read from pre-computed engagement_snapshots w
 - [ ] All queries use indexed columns
 - [ ] No list view loads more than 50 rows unbounded
 - [ ] Admin page load < 2s on standard connection
+- [ ] Admin background is pure white `#ffffff`
+- [ ] Stat cards use correct semantic colors: amber=pending, red=flagged, green=subscribers, blue=sent
+- [ ] Active tab is `#e8e8e8` grey fill — NOT black
+- [ ] Panel headers use `#f2f2f0` off-white background
+- [ ] Row accents are 3px vertical bars colored by status (green/red/amber)
+- [ ] Team pills use team primary_color background with light text
+- [ ] All team names shown as city + name (e.g. "Buffalo Bills")
+- [ ] All interactive states implemented: hover, active, selected
+- [ ] Design system tokens applied consistently across all 3 tabs
 
 ---
 

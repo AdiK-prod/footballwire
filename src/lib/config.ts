@@ -1,5 +1,15 @@
 const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
 
+const serverEnv = () =>
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+
+/** Server-only. Read at call time (cron auth, tests). Prefer `CRON_SECRET`; `VERCEL_CRON_SECRET` supported as alias. */
+export const getCronSecret = (): string => {
+  const e = serverEnv();
+  return e?.CRON_SECRET ?? e?.VERCEL_CRON_SECRET ?? "";
+};
+
 export const config = {
   supabaseUrl: env.VITE_SUPABASE_URL ?? "",
   supabaseAnonKey: env.VITE_SUPABASE_ANON_KEY ?? "",
