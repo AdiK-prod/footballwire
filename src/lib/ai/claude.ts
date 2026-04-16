@@ -1,4 +1,4 @@
-import { config } from "@/lib/config";
+import { config } from "../config";
 
 const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 

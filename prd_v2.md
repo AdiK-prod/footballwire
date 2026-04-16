@@ -437,6 +437,21 @@ One unified system across subscriber app and admin dashboard.
 
 **Newsletter email** retains separate editorial design — unaffected by this system.
 
+**Design Compliance — Non-Negotiable**
+Design is not optional and not a stretch goal. Every UI phase has design
+compliance checkboxes in its DoD. A phase is not complete until all design
+checkboxes pass. Cursor must verify design compliance before reporting a
+phase as done.
+
+Rules that apply to every UI component built:
+- Team names always displayed as `city + " " + name` — never city or name alone
+- Active tabs always `#e8e8e8` grey fill — never black, never dark
+- Card backgrounds always `#f2f2f0` off-white — never pure white for card surfaces
+- Page/panel backgrounds always `#ffffff` pure white
+- All team colors sourced from DB — never hardcoded in code
+- All hover, selected, active, focus states must be implemented — not just default state
+- DM Sans font applied globally — no fallback to system sans-serif
+
 ---
 
 ## Development Phases
@@ -450,12 +465,22 @@ One unified system across subscriber app and admin dashboard.
 - Vercel deployment + BACKLOG.md initialized
 
 **Definition of Done:**
-- [ ] App runs locally on npm run dev
-- [ ] All 32 teams in Supabase with correct colors
-- [ ] All general sources seeded and approved
-- [ ] All DB indexes created
-- [ ] Vercel deploys on push to main
-- [ ] BACKLOG.md in repo with Phase 2 tasks listed
+- [x] App runs locally on npm run dev
+- [x] All 32 teams in Supabase with correct colors — including city, name, abbreviation, primary_color
+- [x] All general sources seeded and approved
+- [x] All DB indexes created
+- [x] Vercel deploys on push to main
+- [x] BACKLOG.md in repo with Phase 2 tasks listed
+- [x] DM Sans font loaded and applied as default across all pages
+- [x] Tailwind design tokens configured: fw-white, fw-card, fw-tab-active, fw-input-bg, fw-ink, fw-ink-mid, fw-ink-muted, fw-ink-faint, fw-border, fw-border-mid
+- [x] Subscriber landing page background is pure white `#ffffff`
+- [x] Team cards display full name as `city + " " + name` (e.g. "Buffalo Bills") everywhere
+- [x] Team cards background is `#f2f2f0` off-white, not white
+- [x] Conference filter tabs: active state is `#e8e8e8` grey fill — NOT black or dark
+- [x] All interactive states implemented: card hover (lift + border), selected (white bg + team color border + checkmark badge)
+- [x] No "Selected" text label on cards — checkmark badge only
+- [x] Signup box hidden before team selection, animates in after
+- [x] Signup box has 4px team primary_color left border
 
 ---
 
@@ -468,11 +493,13 @@ One unified system across subscriber app and admin dashboard.
 - Source type differentiation (general | team_specific | user_submitted)
 
 **Definition of Done:**
-- [ ] Valid team-specific URL → approved in DB
-- [ ] Unreachable URL → rejected with reason
-- [ ] Non-team URL confidence < 60 → flagged, admin notified
-- [ ] General sources never go through validation
-- [ ] source.type correctly set on all records
+- [x] Valid team-specific URL → approved in DB
+- [x] Unreachable URL → rejected with reason
+- [x] Non-team URL confidence < 60 → flagged, admin notified
+- [x] General sources never go through validation
+- [x] source.type correctly set on all records
+- [x] Any UI built in this phase matches design system tokens exactly
+- [x] Team names displayed as city + name wherever shown
 
 ---
 
@@ -494,16 +521,62 @@ One unified system across subscriber app and admin dashboard.
 - Pipeline run opened and closed with counts + status
 
 **Definition of Done:**
-- [ ] Pipeline runs at 6 AM and completes without errors
-- [ ] Articles sourced from multiple sources — not single source dominant
-- [ ] Per-source cap of 3 applied after full fetch
-- [ ] All 4 dimension scores populated per article
-- [ ] Deduplication happens after scoring
-- [ ] Source diversity enforced in top 5
-- [ ] Every fetched article has article_scores_log row
-- [ ] pipeline_runs row closed with completed or failed
-- [ ] One team failure does not block others
-- [ ] New team activates automatically on first subscriber
+
+Cron & Infrastructure:
+- [ ] Vercel Cron triggers at 6:00 AM UTC daily without errors
+- [ ] Cron route returns 401 without CRON_SECRET
+- [ ] Handler is idempotent — safe to manually invoke
+- [ ] Zero active teams exits cleanly — no error
+
+pipeline_runs:
+- [ ] Row created per team at start with status: partial
+- [ ] Row closed with status: completed + correct counts on success
+- [ ] Row always closed with status: failed + error on failure
+- [ ] No row ever stuck as partial after handler exits
+
+Fetch:
+- [ ] RSS feeds parsed via rss-parser — no homepage scraping
+- [ ] All sources fetched completely before any filtering
+- [ ] 3-article-per-source cap applied after full fetch — not during
+- [ ] Full article body fetched via HTTP scrape for every article
+- [ ] Articles with word_count < 200 discarded at quality gate
+
+Filter & Score:
+- [ ] General source articles filtered by team mention in body
+- [ ] Category assigned per article via Claude API
+- [ ] composite_score derived from category weights exactly as specified
+- [ ] 4 dimension scores are NULL — not populated in Phase 3
+- [ ] Beat reporter / wire bonuses not implemented — Phase 8 only
+- [ ] Source diversity enforced — top 5 never all from same source
+
+Deduplication:
+- [ ] Layer 1 token overlap runs after scoring — not before
+- [ ] Layer 2 Claude check runs for Layer 1 flagged pairs only
+- [ ] Duplicate articles marked rejection_reason = duplicate
+
+Selection & Summarisation:
+- [ ] 1 lead + 4 quick hits + all injury articles selected
+- [ ] Stat of the Day references real article_id — never fabricated
+- [ ] AI summary max 3 sentences enforced programmatically
+- [ ] Generic language check runs — regenerates on detection
+- [ ] Contradiction check runs — regenerates on detection
+- [ ] summary_version increments on each regeneration
+
+Logging:
+- [ ] All article_scores_log rows written in single bulk insert at end
+- [ ] No per-article DB writes mid-pipeline
+- [ ] article_id nullable for quality gate failures
+- [ ] Every fetched article has exactly one article_scores_log row
+
+Resilience:
+- [ ] One team failure never blocks other teams
+- [ ] New team with first subscriber included in next 6 AM run
+
+Production validation (SQL counts required — not just npm test):
+- [ ] `SELECT COUNT(*) FROM pipeline_runs` shows completed row after manual invoke
+- [ ] `SELECT COUNT(*) FROM article_scores_log` shows correct article count
+- [ ] `SELECT COUNT(*) FROM articles WHERE ai_summary IS NOT NULL` shows summaries written
+- [ ] No UI built in this phase — pipeline only
 
 ---
 
@@ -549,6 +622,9 @@ One unified system across subscriber app and admin dashboard.
 - [ ] 👍/👎 writes to newsletter_metrics
 - [ ] Unsubscribe sets is_active = false instantly
 - [ ] Admin notified when failure rate > 10%
+- [ ] Email template uses team primary_color dynamically — never hardcoded
+- [ ] All five sections render correctly with real content
+- [ ] Empty sections omitted — no blank blocks in email
 
 ---
 
@@ -593,6 +669,15 @@ Note: Phase 7 upgrades this tab to read from pre-computed engagement_snapshots w
 - [ ] All queries use indexed columns
 - [ ] No list view loads more than 50 rows unbounded
 - [ ] Admin page load < 2s on standard connection
+- [ ] Admin background is pure white `#ffffff`
+- [ ] Stat cards use correct semantic colors: amber=pending, red=flagged, green=subscribers, blue=sent
+- [ ] Active tab is `#e8e8e8` grey fill — NOT black
+- [ ] Panel headers use `#f2f2f0` off-white background
+- [ ] Row accents are 3px vertical bars colored by status (green/red/amber)
+- [ ] Team pills use team primary_color background with light text
+- [ ] All team names shown as city + name (e.g. "Buffalo Bills")
+- [ ] All interactive states implemented: hover, active, selected
+- [ ] Design system tokens applied consistently across all 3 tabs
 
 ---
 
@@ -650,31 +735,68 @@ Note: Phase 7 upgrades this tab to read from pre-computed engagement_snapshots w
 ### Phase 8 — Article Scoring Intelligence 🎯 TARGET
 
 Replaces category-based static scoring with true per-article AI evaluation.
+Also introduces article memory and upgraded summarisation with context.
 
-**8.1 — True Per-Article Scoring**
-Full 4-dimension Claude API call per article as specified in pipeline section.
+**8.1 — Article Memory: Fetch-on-Demand**
+To give Claude context about recent coverage without bloating the context window:
+- At pipeline start, query last 7 days of published article headlines per team
+- Fetch headlines + dates only — never full article bodies of past articles
+- Pass this lightweight list into scoring and summarisation prompts
+- Enables uniqueness scoring: "this story was already covered Monday"
+- Enables contextual summaries: "following this week's trade news..."
+- Token cost is controlled and predictable — headlines only, not full bodies
 
-**8.2 — Syntactic Proximity (Layer 1)**
+```typescript
+const recentCoverage = await getRecentHeadlines(team_id, days=7)
+// Returns: [{ headline, published_at }] — small, bounded context
+```
+
+**8.2 — True Per-Article Scoring**
+Full 4-dimension Claude API call with recent coverage context:
+```
+Evaluate this NFL article for [TEAM NAME] fans.
+Recent coverage this week: [recentCoverage headlines]
+
+Score each 0-100:
+- relevance: does the full body substantively cover this team?
+- significance: how important is this story for a fan today?
+- credibility: how factual and reliable does this content appear?
+- uniqueness: does this cover a distinct angle not in recent coverage?
+
+Reply JSON only: { relevance, significance, credibility, uniqueness,
+composite_score, selection_reasoning }
+```
+Formula: composite_score = (relevance×0.40) + (significance×0.30) + (credibility×0.20) + (uniqueness×0.10)
+
+**8.3 — Upgraded Summarisation**
+- Pass recentCoverage headlines into summarisation prompt
+- Claude can reference broader context when genuinely relevant
+- Still max 3 sentences, still strictly from fetched content only
+
+**8.4 — Syntactic Proximity (Layer 1)**
 Token overlap > 70% between headlines = same story candidate. Runs before scoring.
 
-**8.3 — Semantic Deduplication (Layer 2)**
+**8.5 — Semantic Deduplication (Layer 2)**
 Claude confirms same story for Layer 1 flagged pairs only — not all-vs-all.
 
-**8.4 — Cross-Source Best Selection**
+**8.6 — Cross-Source Best Selection**
 Score all articles in same-story group, keep highest composite_score only.
 Multi-source coverage of same story = significance bonus for that story group.
 
-**8.5 — Source Diversity**
+**8.7 — Source Diversity**
 If top 5 articles all from same source: force article from different source.
 
-**8.6 — Beat Reporter Signal**
+**8.8 — Beat Reporter Signal**
 beat_reporter sources: +10 credibility. Wire services: +5. Unproven user-submitted: -5.
 
 **Definition of Done:**
+- [ ] getRecentHeadlines() returns headlines + dates only — no full bodies
+- [ ] Recent coverage passed into both scoring and summarisation prompts
 - [ ] Every article receives Claude scoring call — no static category scores
-- [ ] All 4 dimension scores in article_scores_log (not null)
+- [ ] All 4 dimension scores populated in article_scores_log (not null)
+- [ ] Summaries reference recent context where relevant
 - [ ] Layer 1 token dedup runs before scoring
-- [ ] Layer 2 semantic check runs for flagged pairs only
+- [ ] Layer 2 Claude semantic check runs for flagged pairs only
 - [ ] Source diversity enforced
 - [ ] Beat reporter bonus applied correctly
 
@@ -695,6 +817,61 @@ beat_reporter sources: +10 credibility. Wire services: +5. Unproven user-submitt
 - NFL calendar phase detection
 - Per-phase scoring weight adjustment
 - Paywall source flagging at source level
+
+---
+
+### Phase 12 — Podcast & Radio Discovery (Post-target)
+
+Adds an optional discovery section to the newsletter surfacing fan podcasts
+and radio shows. This is a **discovery feature, not a news feature** — the
+value is helping subscribers find content channels they didn't know existed.
+
+**12.1 — Podcast Source Type**
+- New value added to sources.type enum: `podcast`
+- Podcast sources follow their own validation pipeline — separate from article sources
+- Most podcasts publish RSS feeds — uses existing rss-parser infrastructure
+- Admin can manually curate shows without RSS
+
+**12.2 — Show-Level Validation**
+Validate the show, not individual episodes. Applied once when source is added.
+- Check 1: RSS feed reachable and returns valid episode list
+- Check 2: Claude API — "Does this show substantively cover [TEAM NAME]?"
+- Check 3: Publishing frequency — must publish at least monthly
+- Admin can override and manually approve/reject any show
+
+**12.3 — Episode Selection (Per Pipeline Run)**
+- Fetch latest episode from approved podcast RSS feeds for this team
+- Claude relevance check per episode: does this cover the team this week?
+- If not relevant: check next most recent episode (max 3 lookback)
+- One podcast block per newsletter maximum — most relevant episode wins
+- Omit section entirely if no relevant episode found — graceful omit
+
+**12.4 — Newsletter Section**
+Optional Section 6 — rendered after Stat of the Day, before Footer:
+```
+── Listen ───────────────────────────────────
+[Show Name] · [Episode Title]
+One sentence: what this episode covers for this team.
+→ Listen
+─────────────────────────────────────────────
+```
+- Never replaces an article slot — purely additive
+- Omitted entirely when no relevant episode exists
+
+**12.5 — Admin & Subscriber Submission**
+- Podcast sources appear in Source Queue with type badge: podcast
+- Separate filter in Source Queue for podcast type
+- Subscribers can submit podcast suggestions via newsletter footer link
+- Submissions go through standard validation pipeline
+
+**Definition of Done:**
+- [ ] podcast added to sources.type enum with migration
+- [ ] Show-level validation runs independently from article validation
+- [ ] Episode selected based on team relevance — not just recency
+- [ ] Newsletter renders podcast block when relevant episode exists
+- [ ] Section omitted gracefully when no relevant episode found
+- [ ] Admin Source Queue filters podcast sources correctly
+- [ ] One podcast block per newsletter maximum enforced
 
 ---
 
@@ -748,4 +925,4 @@ Cursor runs all Active tasks for the current phase autonomously — no per-task 
 **MVP Scope**
 - Phases 1-5 constitute the MVP
 - Target completion includes Phases 6-8
-- Phases 9-11 are documented but explicitly deferred post-target
+- Phases 9-12 are documented but explicitly deferred post-target

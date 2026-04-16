@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@layer base {
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    margin: 0;
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 16px;
+    background: var(--color-app-bg);
+    color: var(--color-text-primary);
+  }
+}
+
 :root {
   --color-app-bg: #ffffff;
   --color-surface-card: #f2f2f0;
@@ -13,9 +27,3 @@
   --color-border-mid: #d4d4d4;
 }
 
-body {
-  margin: 0;
-  font-family: "DM Sans", system-ui, sans-serif;
-  background: var(--color-app-bg);
-  color: var(--color-text-primary);
-}

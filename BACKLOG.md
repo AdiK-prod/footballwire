@@ -2,9 +2,17 @@
 
 ## Active
 
+/
+---
+
+## Completed
+
 ### Phase 2 — Source Validation Engine
 
+_All Phase 2 tasks completed; detail retained below for history._
+
 **Validation API Route**
+
 - [x] Create Vercel API route: `app/api/validate-source/route.ts`
 - [x] Add Zod schema validation for request payload (`url`, `teamId`, `sourceType`)
 - [x] Implement structured JSON responses with proper HTTP status codes
@@ -12,11 +20,13 @@
 - [x] Add timeout-safe error handling for all async steps (10s RSS check cap)
 
 **Reachability + RSS Parsing**
+
 - [x] Validate submitted URL is reachable and parseable RSS via `rss-parser`
 - [x] On unreachable/invalid RSS set source `status = rejected` with rejection reason
 - [x] Verify parser extraction of `title`, `link`, `pubDate`, `description` for validation samples
 
 **Claude Relevance Check**
+
 - [x] Add server-side Claude relevance check for team-specific coverage
 - [x] Enforce strict JSON response parsing: `{ relevant: boolean, confidence: number }`
 - [x] Approve source when `confidence >= 60`
@@ -24,12 +34,14 @@
 - [x] Wrap Claude call in try/catch with safe fallback (never crash request)
 
 **Source Type + Filtering Rules**
+
 - [x] Enforce source types: `general | team_specific | user_submitted`
 - [x] Ensure general sources never go through validation endpoint
 - [x] Persist type/status transitions correctly in Supabase
 - [x] Track paywall-rate metadata field for future queue highlighting
 
 **Admin Notification + Verification**
+
 - [x] Trigger admin notification flow for flagged sources
 - [x] Add test cases for valid, unreachable, and low-confidence source scenarios
 - [x] Verify DoD: valid team-specific URL -> approved
@@ -40,32 +52,8 @@
 
 ---
 
-## Completed
+### Phase 1 & setup — flat history
 
-- [x] Create Vercel API route: `app/api/validate-source/route.ts` — Phase 2
-- [x] Add Zod schema validation for request payload (`url`, `teamId`, `sourceType`) — Phase 2
-- [x] Implement structured JSON responses with proper HTTP status codes — Phase 2
-- [x] Keep all business logic in `src/lib/services/sourceService.ts` (no route-level business logic) — Phase 2
-- [x] Add timeout-safe error handling for all async steps (10s RSS check cap) — Phase 2
-- [x] Validate submitted URL is reachable and parseable RSS via `rss-parser` — Phase 2
-- [x] On unreachable/invalid RSS set source `status = rejected` with rejection reason — Phase 2
-- [x] Verify parser extraction of `title`, `link`, `pubDate`, `description` for validation samples — Phase 2
-- [x] Add server-side Claude relevance check for team-specific coverage — Phase 2
-- [x] Enforce strict JSON response parsing: `{ relevant: boolean, confidence: number }` — Phase 2
-- [x] Approve source when `confidence >= 60` — Phase 2
-- [x] Flag source when `confidence < 60` and persist validation notes — Phase 2
-- [x] Wrap Claude call in try/catch with safe fallback (never crash request) — Phase 2
-- [x] Enforce source types: `general | team_specific | user_submitted` — Phase 2
-- [x] Ensure general sources never go through validation endpoint — Phase 2
-- [x] Persist type/status transitions correctly in Supabase — Phase 2
-- [x] Track paywall-rate metadata field for future queue highlighting — Phase 2
-- [x] Trigger admin notification flow for flagged sources — Phase 2
-- [x] Add test cases for valid, unreachable, and low-confidence source scenarios — Phase 2
-- [x] Verify DoD: valid team-specific URL -> approved — Phase 2
-- [x] Verify DoD: unreachable URL -> rejected with reason — Phase 2
-- [x] Verify DoD: non-team URL confidence < 60 -> flagged + admin notified — Phase 2
-- [x] Verify DoD: general sources bypass validation — Phase 2
-- [x] Verify DoD: source `type` stored correctly for all records — Phase 2
 - [x] Add Phase 2 tasks to Active section upon Phase 1 completion — Phase 1
 - [x] Create repository on GitHub (private) — Phase 1
 - [x] Connect local repo to GitHub remote (`git remote add origin`) — Phase 1
@@ -115,4 +103,3 @@
 - [x] DM Sans font loaded via Google Fonts — Phase 1
 - [x] Global CSS variables for all color tokens — Phase 1
 - [x] Create `.gitignore` — exclude `.env`, `node_modules`, `.vercel`, Supabase local config — Phase 1
-
