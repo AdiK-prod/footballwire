@@ -25,7 +25,14 @@ export const handleCronRunPipelineRequest = async (
     return json({ ok: false, error: "Unauthorized" }, 401);
   }
 
-  await runDailyPipeline();
+  try {
+    await runDailyPipeline();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "pipeline failed";
+    console.error(JSON.stringify({ scope: "cron", pipelineError: message }));
+    return json({ ok: false, error: message }, 500);
+  }
+
   return json(
     {
       ok: true,
