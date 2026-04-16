@@ -1,6 +1,10 @@
 /**
  * Bundles Vercel serverless handlers so `src/lib` is inlined (not deployed as /var/task/src).
  * Run after `vite build` via npm run build.
+ *
+ * Outputs are committed to `api/` so Git deployments always ship serverless functions even if
+ * a build step is skipped. After changing `server/vercel/*.ts` or `src/lib` used by API routes,
+ * run `npm run build` and commit the updated `api/**/*.js` files.
  */
 import * as esbuild from "esbuild";
 import { fileURLToPath } from "url";
