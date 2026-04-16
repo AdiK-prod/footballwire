@@ -1,4 +1,4 @@
-import { handleValidateSourceRequest } from "@/lib/services/validateSourceHttp";
+import { handleValidateSourceRequest } from "../../../src/lib/services/validateSourceHttp";
 
 /** Thin wrapper; production uses root `api/validate-source.ts` on Vercel. */
 
