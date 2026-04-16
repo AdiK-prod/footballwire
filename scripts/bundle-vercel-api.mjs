@@ -4,7 +4,7 @@
  *
  * Outputs are committed to `api/` so Git deployments always ship serverless functions even if
  * a build step is skipped. After changing `server/vercel/*.ts` or `src/lib` used by API routes,
- * run `npm run build` and commit the updated `api/**/*.js` files.
+ * run `npm run build` and commit the updated JS bundles under `api/` (e.g. cron and validate-source).
  */
 import * as esbuild from "esbuild";
 import { fileURLToPath } from "url";
