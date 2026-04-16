@@ -33,7 +33,9 @@ for (const { entry, outfile } of bundles) {
     outfile,
     format: "esm",
     sourcemap: false,
-    external: ["@vercel/node"],
+    // rss-parser uses require("http"/"https"); bundling breaks with "Dynamic require is not supported".
+    // Supabase client also expects normal Node resolution for optional deps.
+    external: ["@vercel/node", "rss-parser", "@supabase/supabase-js"],
     logLevel: "info",
   });
 }
