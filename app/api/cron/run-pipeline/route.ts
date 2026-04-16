@@ -1,4 +1,4 @@
-import { handleCronRunPipelineRequest } from "@/lib/cron/cronRunPipelineHttp";
+import { handleCronRunPipelineRequest } from "../../../../src/lib/cron/cronRunPipelineHttp";
 
 /**
  * Test / future Next-style entry. **Production Vercel** uses root `api/cron/run-pipeline.ts`
