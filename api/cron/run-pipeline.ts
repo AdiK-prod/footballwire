@@ -3,7 +3,7 @@
  * Vite-only projects do not deploy app/api route handlers (Next.js App Router only).
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { handleCronRunPipelineRequest } from "@/lib/cron/cronRunPipelineHttp";
+import { handleCronRunPipelineRequest } from "../../src/lib/cron/cronRunPipelineHttp";
 
 export const config = {
   maxDuration: 300,

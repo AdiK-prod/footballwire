@@ -1,6 +1,19 @@
-import { config } from "@/lib/config";
+import { config } from "../config";
+import type { ArticleCategory } from "../pipeline/articleCategory";
+import { enforceMaxThreeSentences } from "../pipeline/summaryText";
 
 const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+
+const VALID_CATEGORIES: readonly ArticleCategory[] = [
+  "transaction",
+  "injury",
+  "game_analysis",
+  "rumor",
+  "general",
+];
+
+const isArticleCategory = (value: string): value is ArticleCategory =>
+  (VALID_CATEGORIES as readonly string[]).includes(value);
 
 const stripJsonFences = (value: string) =>
   value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
@@ -36,6 +49,34 @@ const postClaude = async (system: string, user: string, maxTokens: number) => {
   return payload.content?.find((item) => item.type === "text")?.text ?? "";
 };
 
+/**
+ * Phase 3 — category only (Phases 1–7). Composite comes from fixed weights in articleCategory.
+ * Four dimension scores are Phase 8.
+ */
+export const classifyArticleCategory = async (params: {
+  title: string;
+  bodyExcerpt: string;
+}): Promise<ArticleCategory> => {
+  const text = await postClaude(
+    "You classify NFL news articles into exactly one category. JSON only.",
+    `Choose one category: transaction | injury | game_analysis | rumor | general\n\n` +
+      `transaction: trades, signings, cuts, waivers, roster moves\n` +
+      `injury: injuries, IR, practice status, health\n` +
+      `game_analysis: recaps, film, grades, snap counts, breakdowns\n` +
+      `rumor: rumors, unnamed sources, speculation\n` +
+      `general: everything else\n\n` +
+      `Title: ${params.title}\n\nBody excerpt:\n${params.bodyExcerpt.slice(0, 8000)}\n\n` +
+      `Reply JSON: {"category":"transaction"|"injury"|"game_analysis"|"rumor"|"general"}`,
+    200,
+  );
+  const parsed = JSON.parse(stripJsonFences(text)) as { category?: string };
+  const raw = parsed.category?.trim().toLowerCase() ?? "";
+  if (isArticleCategory(raw)) {
+    return raw;
+  }
+  return "general";
+};
+
 /** Layer 2 dedup — only when Layer 1 flagged a pair. */
 export const confirmSameStory = async (headlineA: string, headlineB: string) => {
   const text = await postClaude(
@@ -62,7 +103,7 @@ export const summarizeArticleBody = async (params: {
   if (!summary) {
     throw new Error("Empty summary from Claude");
   }
-  return summary;
+  return enforceMaxThreeSentences(summary);
 };
 
 export const checkGenericSummary = async (summary: string) => {

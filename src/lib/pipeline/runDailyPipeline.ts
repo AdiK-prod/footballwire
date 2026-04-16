@@ -1,5 +1,5 @@
-import { getActiveSubscriberTeamIds } from "@/lib/db/pipelineDb";
-import { runTeamPipeline } from "@/lib/pipeline/runTeamPipeline";
+import { getActiveSubscriberTeamIds } from "../db/pipelineDb";
+import { runTeamPipeline } from "./runTeamPipeline";
 
 const log = (msg: string, extra?: Record<string, unknown>) => {
   console.info(JSON.stringify({ scope: "pipeline-orchestrator", msg, ...extra }));

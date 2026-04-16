@@ -1,7 +1,7 @@
-import { confirmSameStory } from "@/lib/ai/claudePipeline";
+import { confirmSameStory } from "../ai/claudePipeline";
 import {
   headlineTokenOverlapExceeds,
-} from "@/lib/pipeline/tokenOverlap";
+} from "./tokenOverlap";
 
 export type Dedupable = {
   title: string;

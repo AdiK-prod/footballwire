@@ -6,6 +6,7 @@ import {
 } from "@/lib/pipeline/articleCategory";
 import { enforceSourceDiversityInTopFive } from "@/lib/pipeline/diversityTopFive";
 import { headlineTokenOverlapExceeds } from "@/lib/pipeline/tokenOverlap";
+import { enforceMaxThreeSentences } from "@/lib/pipeline/summaryText";
 
 describe("Phase 3.11 — category composite (PRD Step 3 Phases 1–7)", () => {
   it("returns correct composite_score per category", () => {
@@ -36,6 +37,14 @@ describe("Phase 3.11 — dedup token overlap >70%", () => {
     const a = "Stock market closes higher Tuesday afternoon";
     const b = "Local bakery wins regional pie competition";
     expect(headlineTokenOverlapExceeds(a, b, 0.7)).toBe(false);
+  });
+});
+
+describe("Phase 3.11 — summary length cap", () => {
+  it("truncates to at most three sentences", () => {
+    const long =
+      "First. Second. Third. Fourth sentence should be dropped.";
+    expect(enforceMaxThreeSentences(long)).toBe("First. Second. Third.");
   });
 });
 

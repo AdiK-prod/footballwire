@@ -1,4 +1,4 @@
-import { getCronSecret } from "@/lib/config";
+import { getCronSecret } from "../config";
 
 /**
  * Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` when `CRON_SECRET` is set.

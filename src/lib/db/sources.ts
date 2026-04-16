@@ -1,4 +1,4 @@
-import { getServiceRoleClient } from "@/lib/supabase/server";
+import { getServiceRoleClient } from "../supabase/server";
 
 export type SourceStatus = "pending" | "approved" | "rejected" | "flagged";
 export type SourceType = "general" | "team_specific" | "user_submitted";

@@ -1,4 +1,4 @@
-import type { ArticleCategory } from "@/lib/pipeline/articleCategory";
+import type { ArticleCategory } from "./articleCategory";
 
 const patterns: { category: ArticleCategory; re: RegExp }[] = [
   { category: "injury", re: /\b(ir\b|injury|injuries|injured|concussion|cleared to play|questionable|doubtful|out for|placed on ir)\b/i },

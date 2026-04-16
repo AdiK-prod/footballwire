@@ -1,14 +1,14 @@
 import Parser from "rss-parser";
 import { z } from "zod";
-import { checkTeamSourceRelevance } from "@/lib/ai/claude";
+import { checkTeamSourceRelevance } from "../ai/claude";
 import {
   createPendingSource,
   getTeamNameById,
   type SourceRecord,
   type SourceType,
   updateSourceStatus,
-} from "@/lib/db/sources";
-import { notifyAdminOfFlaggedSource } from "@/lib/services/adminNotificationService";
+} from "../db/sources";
+import { notifyAdminOfFlaggedSource } from "./adminNotificationService";
 
 const parser = new Parser();
 

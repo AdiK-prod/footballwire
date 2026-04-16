@@ -1,5 +1,5 @@
-import { getServiceRoleClient } from "@/lib/supabase/server";
-import type { Team } from "@/lib/types";
+import { getServiceRoleClient } from "../supabase/server";
+import type { Team } from "../types";
 
 export const getActiveSubscriberTeamIds = async (): Promise<number[]> => {
   const supabase = getServiceRoleClient();

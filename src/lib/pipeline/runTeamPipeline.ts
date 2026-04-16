@@ -1,30 +1,31 @@
 import {
   checkContradiction,
   checkGenericSummary,
+  classifyArticleCategory,
   summarizeArticleBody,
-} from "@/lib/ai/claudePipeline";
-import type { ArticleCategory } from "@/lib/pipeline/articleCategory";
-import { getCompositeForCategory, getScoreThreshold } from "@/lib/pipeline/articleCategory";
-import { categorizeFromTitleAndBody } from "@/lib/pipeline/categorizeFromText";
-import { deduplicateByHeadlines } from "@/lib/pipeline/deduplicateCandidates";
-import { enforceSourceDiversityInTopFive } from "@/lib/pipeline/diversityTopFive";
+} from "../ai/claudePipeline";
+import type { ArticleCategory } from "./articleCategory";
+import { getCompositeForCategory, getScoreThreshold } from "./articleCategory";
+import { categorizeFromTitleAndBody } from "./categorizeFromText";
+import { deduplicateByHeadlines } from "./deduplicateCandidates";
+import { enforceSourceDiversityInTopFive } from "./diversityTopFive";
 import {
   countWords,
   fetchArticleHtml,
   stripHtmlToText,
-} from "@/lib/pipeline/fetchArticleBody";
-import { fetchLatestRssItems } from "@/lib/pipeline/fetchRssItems";
-import type { ArticleUpsertPayload, ScoreLogPayload } from "@/lib/pipeline/persistTeamRun";
-import { upsertArticlesAndInsertScoreLogs } from "@/lib/pipeline/persistTeamRun";
-import { textMentionsTeam } from "@/lib/pipeline/teamMention";
-import type { ApprovedSourceRow } from "@/lib/db/pipelineDb";
+} from "./fetchArticleBody";
+import { fetchLatestRssItems } from "./fetchRssItems";
+import type { ArticleUpsertPayload, ScoreLogPayload } from "./persistTeamRun";
+import { upsertArticlesAndInsertScoreLogs } from "./persistTeamRun";
+import { textMentionsTeam } from "./teamMention";
+import type { ApprovedSourceRow } from "../db/pipelineDb";
 import {
   createPipelineRun,
   finalizePipelineRun,
   getTeamById,
   listApprovedSourcesForTeam,
-} from "@/lib/db/pipelineDb";
-import { getServiceRoleClient } from "@/lib/supabase/server";
+} from "../db/pipelineDb";
+import { getServiceRoleClient } from "../supabase/server";
 
 type Enriched = {
   source: ApprovedSourceRow;
@@ -48,6 +49,7 @@ const pipelineInfo = (msg: string, extra?: Record<string, unknown>) => {
   console.info(JSON.stringify({ scope: "pipeline", msg, ...extra }));
 };
 
+/** PRD: generic + contradiction checks — at most one regeneration after the first summary. */
 const summarizeWithRetries = async (params: {
   teamDisplayName: string;
   title: string;
@@ -61,19 +63,17 @@ const summarizeWithRetries = async (params: {
     bodyExcerpt: params.body,
   });
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let bad = false;
-    try {
-      bad =
-        (await checkGenericSummary(summary)) ||
-        (await checkContradiction(params.headline, summary));
-    } catch {
-      bad = false;
-    }
-    if (!bad) {
-      return { summary, summaryVersion };
-    }
-    summaryVersion += 1;
+  let bad = false;
+  try {
+    bad =
+      (await checkGenericSummary(summary)) ||
+      (await checkContradiction(params.headline, summary));
+  } catch {
+    bad = false;
+  }
+
+  if (bad) {
+    summaryVersion = 2;
     summary = await summarizeArticleBody({
       teamDisplayName: params.teamDisplayName,
       title: params.title,
@@ -89,6 +89,21 @@ const statSnippetFromText = (text: string): string | null => {
     /\b\d{1,3}(?:,\d{3})*\s*(?:yards|YAC|TDs?|points|receptions?|carries?)\b/i,
   );
   return m ? m[0] : null;
+};
+
+const findStatFromArticles = (
+  ordered: Enriched[],
+): { snippet: string; article: Enriched } | null => {
+  for (const a of ordered) {
+    if (!a.rawText || !a.passedQuality) {
+      continue;
+    }
+    const s = statSnippetFromText(a.rawText);
+    if (s) {
+      return { snippet: s, article: a };
+    }
+  }
+  return null;
 };
 
 const buildScoreLogs = (params: {
@@ -135,6 +150,8 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
   const attempts: Enriched[] = [];
 
   let runId = 0;
+  let pipelineSucceeded = false;
+  let lastError: string | null = null;
 
   try {
     const team = await getTeamById(teamId);
@@ -154,6 +171,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
         articlesSelected: 0,
         notes: "No approved sources",
       });
+      pipelineSucceeded = true;
       return;
     }
 
@@ -198,7 +216,21 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
           passedQualityCount += 1;
         }
 
-        const category = categorizeFromTitleAndBody(item.title, rawText);
+        let category: ArticleCategory = "general";
+        try {
+          category = await classifyArticleCategory({
+            title: item.title,
+            bodyExcerpt: rawText,
+          });
+        } catch (err) {
+          pipelineInfo("category_claude_failed", {
+            teamId,
+            sourceId: source.id,
+            message: err instanceof Error ? err.message : "unknown",
+          });
+          category = categorizeFromTitleAndBody(item.title, rawText);
+        }
+
         const compositeScore = getCompositeForCategory(category);
         scoredCount += 1;
 
@@ -235,13 +267,15 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
 
     const teamDisplay = `${team.city} ${team.name}`;
 
-    const thresholdPool = attempts.filter((a) => a.passedThreshold);
-    const sorted = [...thresholdPool].sort((a, b) => b.compositeScore - a.compositeScore);
+    const qualityPassedSorted = [...attempts.filter((a) => a.passedQuality)].sort(
+      (a, b) => b.compositeScore - a.compositeScore,
+    );
 
-    const { kept, dropped } = await deduplicateByHeadlines(sorted);
+    const { kept, dropped } = await deduplicateByHeadlines(qualityPassedSorted);
     const duplicateUrls = new Set(dropped.map((d) => d.link));
 
-    const nonInjuryRanked = kept
+    const thresholdKept = kept.filter((k) => k.passedThreshold);
+    const nonInjuryRanked = thresholdKept
       .filter((k) => k.category !== "injury")
       .map(toRanked);
 
@@ -319,19 +353,35 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
       }
     }
 
-    const statLine = lead?.rawText ? statSnippetFromText(lead.rawText) : null;
-    if (statLine) {
-      pipelineInfo("stat_snippet", { teamId, statLine });
+    const statOrdered = [...kept].sort((a, b) => {
+      const ga = a.source.type === "general" ? 1 : 0;
+      const gb = b.source.type === "general" ? 1 : 0;
+      if (ga !== gb) {
+        return ga - gb;
+      }
+      return b.compositeScore - a.compositeScore;
+    });
+    const statHit = findStatFromArticles(statOrdered);
+    if (statHit) {
+      pipelineInfo("stat_snippet", { teamId, statLine: statHit.snippet });
     }
 
     const articlesSelected = toSummarize.filter(
       (x) => x.passedQuality && x.mentionsTeam,
     ).length;
 
-    await upsertArticlesAndInsertScoreLogs(supabase, {
+    const urlToId = await upsertArticlesAndInsertScoreLogs(supabase, {
       articles: articlesPayload,
       logs: scoreLogs,
     });
+
+    let notes: string | null = null;
+    if (statHit) {
+      notes = JSON.stringify({
+        statSnippet: statHit.snippet,
+        statArticleId: urlToId.get(statHit.article.link) ?? null,
+      });
+    }
 
     await finalizePipelineRun({
       runId,
@@ -340,22 +390,31 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
       passedQuality: passedQualityCount,
       articlesScored: scoredCount,
       articlesSelected,
-      notes: statLine ? `stat: ${statLine}` : null,
+      notes,
     });
+    pipelineSucceeded = true;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "pipeline failed";
-    pipelineInfo("team_pipeline_failed", { teamId, message });
-    if (runId > 0) {
-      await finalizePipelineRun({
-        runId,
-        status: "failed",
-        articlesFetched,
-        passedQuality: passedQualityCount,
-        articlesScored: scoredCount,
-        articlesSelected: 0,
-        notes: message,
-      });
-    }
+    lastError = error instanceof Error ? error.message : "pipeline failed";
+    pipelineInfo("team_pipeline_failed", { teamId, message: lastError });
     throw error;
+  } finally {
+    if (runId > 0 && !pipelineSucceeded) {
+      try {
+        await finalizePipelineRun({
+          runId,
+          status: "failed",
+          articlesFetched,
+          passedQuality: passedQualityCount,
+          articlesScored: scoredCount,
+          articlesSelected: 0,
+          notes: lastError ?? "pipeline_failed_before_success_finalize",
+        });
+      } catch (finalizeErr) {
+        pipelineInfo("finalize_failed_in_finally", {
+          runId,
+          message: finalizeErr instanceof Error ? finalizeErr.message : "unknown",
+        });
+      }
+    }
   }
 };

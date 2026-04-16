@@ -1,4 +1,4 @@
-import type { Team } from "@/lib/types";
+import type { Team } from "../types";
 
 /** Article-level team filter: city, nickname, abbreviation (PRD — no hardcoded team names in callers). */
 export const textMentionsTeam = (text: string, team: Team): boolean => {

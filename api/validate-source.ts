@@ -2,7 +2,7 @@
  * Vercel Serverless Function — root /api (see api/cron/run-pipeline.ts note).
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { handleValidateSourceRequest } from "@/lib/services/validateSourceHttp";
+import { handleValidateSourceRequest } from "../src/lib/services/validateSourceHttp";
 
 export const config = {
   maxDuration: 60,

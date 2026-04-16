@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { validateSource, validateSourceInput } from "@/lib/services/sourceService";
+import { validateSource, validateSourceInput } from "./sourceService";
 
 type ErrorResponse = {
   ok: false;

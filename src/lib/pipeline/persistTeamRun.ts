@@ -57,7 +57,7 @@ export const upsertArticlesAndInsertScoreLogs = async (
     articles: ArticleUpsertPayload[];
     logs: ScoreLogPayload[];
   },
-): Promise<void> => {
+): Promise<Map<string, number>> => {
   const urlToId = new Map<string, number>();
 
   if (params.articles.length > 0) {
@@ -103,7 +103,7 @@ export const upsertArticlesAndInsertScoreLogs = async (
   }));
 
   if (logsResolved.length === 0) {
-    return;
+    return urlToId;
   }
 
   const { error: logError } = await supabase.from("article_scores_log").insert(logsResolved);
@@ -111,4 +111,6 @@ export const upsertArticlesAndInsertScoreLogs = async (
   if (logError) {
     throw new Error(`article_scores_log insert failed: ${logError.message}`);
   }
+
+  return urlToId;
 };
