@@ -1,8 +1,9 @@
 /**
- * Vercel Serverless Function — root /api (see api/cron/run-pipeline.ts note).
+ * Source for the Vercel API bundle (see scripts/bundle-vercel-api.mjs).
+ * Deployed artifact: api/validate-source.js (generated at build time).
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { handleValidateSourceRequest } from "../src/lib/services/validateSourceHttp";
+import { handleValidateSourceRequest } from "../../src/lib/services/validateSourceHttp";
 
 export const config = {
   maxDuration: 60,

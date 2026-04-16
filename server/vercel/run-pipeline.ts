@@ -1,6 +1,6 @@
 /**
- * Vercel Serverless Function (root /api directory).
- * Vite-only projects do not deploy app/api route handlers (Next.js App Router only).
+ * Source for the Vercel cron bundle (see scripts/bundle-vercel-api.mjs).
+ * Deployed artifact: api/cron/run-pipeline.js (generated at build time).
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { handleCronRunPipelineRequest } from "../../src/lib/cron/cronRunPipelineHttp";
