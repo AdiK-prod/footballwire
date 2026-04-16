@@ -1,6 +1,5 @@
 import { config } from "../config";
-
-const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+import { formatAnthropicHttpError } from "./anthropicHttp";
 
 type RelevanceResult = {
   relevant: boolean;
@@ -34,7 +33,7 @@ Reply JSON only:
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model: config.anthropicModel,
       max_tokens: 100,
       temperature: 0.2,
       system:
@@ -49,7 +48,8 @@ Reply JSON only:
   });
 
   if (!response.ok) {
-    throw new Error(`Claude API failed: ${response.status}`);
+    const detail = await formatAnthropicHttpError(response);
+    throw new Error(`Claude API failed: ${detail}`);
   }
 
   const payload = (await response.json()) as {

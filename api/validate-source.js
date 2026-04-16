@@ -13795,6 +13795,10 @@ var config2 = {
   get anthropicApiKey() {
     return str(serverEnv()?.ANTHROPIC_API_KEY);
   },
+  /** Override default model if snapshot ID is unavailable (400). See docs.anthropic.com models. */
+  get anthropicModel() {
+    return str(serverEnv()?.ANTHROPIC_MODEL) || str(serverEnv()?.CLAUDE_MODEL) || "claude-haiku-4-5-20251001";
+  },
   get resendApiKey() {
     return str(serverEnv()?.RESEND_API_KEY);
   },
@@ -13806,8 +13810,20 @@ var config2 = {
   }
 };
 
+// src/lib/ai/anthropicHttp.ts
+var formatAnthropicHttpError = async (response) => {
+  try {
+    const data = await response.json();
+    const msg = data.error?.message?.trim();
+    if (msg) {
+      return `${response.status}: ${msg}`;
+    }
+  } catch {
+  }
+  return `${response.status}`;
+};
+
 // src/lib/ai/claude.ts
-var CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 var stripJsonFences = (value) => value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 var checkTeamSourceRelevance = async (params) => {
   if (!config2.anthropicApiKey) {
@@ -13827,7 +13843,7 @@ Reply JSON only:
       "content-type": "application/json"
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model: config2.anthropicModel,
       max_tokens: 100,
       temperature: 0.2,
       system: "You are a source relevance validator. Return strict JSON with no prose or markdown.",
@@ -13840,7 +13856,8 @@ Reply JSON only:
     })
   });
   if (!response.ok) {
-    throw new Error(`Claude API failed: ${response.status}`);
+    const detail = await formatAnthropicHttpError(response);
+    throw new Error(`Claude API failed: ${detail}`);
   }
   const payload = await response.json();
   const text = payload.content?.find((item) => item.type === "text")?.text ?? "";

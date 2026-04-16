@@ -22,6 +22,10 @@ var config = {
   get anthropicApiKey() {
     return str(serverEnv()?.ANTHROPIC_API_KEY);
   },
+  /** Override default model if snapshot ID is unavailable (400). See docs.anthropic.com models. */
+  get anthropicModel() {
+    return str(serverEnv()?.ANTHROPIC_MODEL) || str(serverEnv()?.CLAUDE_MODEL) || "claude-haiku-4-5-20251001";
+  },
   get resendApiKey() {
     return str(serverEnv()?.RESEND_API_KEY);
   },
@@ -136,8 +140,20 @@ var enforceMaxThreeSentences = (text) => {
   return parts.slice(0, 3).join(" ").trim();
 };
 
+// src/lib/ai/anthropicHttp.ts
+var formatAnthropicHttpError = async (response) => {
+  try {
+    const data = await response.json();
+    const msg = data.error?.message?.trim();
+    if (msg) {
+      return `${response.status}: ${msg}`;
+    }
+  } catch {
+  }
+  return `${response.status}`;
+};
+
 // src/lib/ai/claudePipeline.ts
-var CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 var VALID_CATEGORIES = [
   "transaction",
   "injury",
@@ -159,7 +175,7 @@ var postClaude = async (system, user, maxTokens) => {
       "content-type": "application/json"
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model: config.anthropicModel,
       max_tokens: maxTokens,
       temperature: 0.2,
       system,
@@ -167,7 +183,8 @@ var postClaude = async (system, user, maxTokens) => {
     })
   });
   if (!response.ok) {
-    throw new Error(`Claude API failed: ${response.status}`);
+    const detail = await formatAnthropicHttpError(response);
+    throw new Error(`Claude API failed: ${detail}`);
   }
   const payload = await response.json();
   return payload.content?.find((item) => item.type === "text")?.text ?? "";
