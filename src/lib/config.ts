@@ -42,6 +42,14 @@ export const config = {
   get anthropicApiKey(): string {
     return str(serverEnv()?.ANTHROPIC_API_KEY);
   },
+  /** Override default model if snapshot ID is unavailable (400). See docs.anthropic.com models. */
+  get anthropicModel(): string {
+    return (
+      str(serverEnv()?.ANTHROPIC_MODEL) ||
+      str(serverEnv()?.CLAUDE_MODEL) ||
+      "claude-haiku-4-5-20251001"
+    );
+  },
   get resendApiKey(): string {
     return str(serverEnv()?.RESEND_API_KEY);
   },

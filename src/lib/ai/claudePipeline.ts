@@ -1,8 +1,7 @@
 import { config } from "../config";
 import type { ArticleCategory } from "../pipeline/articleCategory";
 import { enforceMaxThreeSentences } from "../pipeline/summaryText";
-
-const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+import { formatAnthropicHttpError } from "./anthropicHttp";
 
 const VALID_CATEGORIES: readonly ArticleCategory[] = [
   "transaction",
@@ -31,7 +30,7 @@ const postClaude = async (system: string, user: string, maxTokens: number) => {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model: config.anthropicModel,
       max_tokens: maxTokens,
       temperature: 0.2,
       system,
@@ -40,7 +39,8 @@ const postClaude = async (system: string, user: string, maxTokens: number) => {
   });
 
   if (!response.ok) {
-    throw new Error(`Claude API failed: ${response.status}`);
+    const detail = await formatAnthropicHttpError(response);
+    throw new Error(`Claude API failed: ${detail}`);
   }
 
   const payload = (await response.json()) as {
