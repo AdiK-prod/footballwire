@@ -59,4 +59,17 @@ export const config = {
   get adminAlertEmail(): string {
     return str(serverEnv()?.ADMIN_ALERT_EMAIL);
   },
+  get appBaseUrl(): string {
+    return (
+      str(serverEnv()?.APP_BASE_URL) ||
+      str(serverEnv()?.NEXT_PUBLIC_APP_BASE_URL) ||
+      "https://www.footballwire.uk"
+    );
+  },
+  get trackingSecret(): string {
+    return str(serverEnv()?.TRACKING_SECRET);
+  },
+  get unsubscribeSecret(): string {
+    return str(serverEnv()?.UNSUBSCRIBE_SECRET) || str(serverEnv()?.TRACKING_SECRET);
+  },
 } as const;
