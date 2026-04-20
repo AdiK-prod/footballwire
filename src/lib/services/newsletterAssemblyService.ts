@@ -37,16 +37,18 @@ const formatDate = (iso: string): string => {
 
 const buildArticleRow = (a: SelectedArticle): string => {
   const summary = a.ai_summary ? esc(a.ai_summary) : "Summary unavailable.";
-  return `<li style="margin:0 0 16px 0;">
-<p style="margin:0 0 4px 0;font-size:17px;font-weight:700;color:#111111;">${esc(a.title)}</p>
-<p style="margin:0 0 8px 0;color:#444444;line-height:1.45;">${summary}</p>
-<p style="margin:0;color:#666666;font-size:12px;">${esc(formatDate(a.published_at))}</p>
-<p style="margin:8px 0 0 0;"><a href="${esc(a.original_url)}" style="color:#0b57d0;text-decoration:underline;">Read more</a></p>
+  return `<li style="margin:0 0 14px 0;list-style:none;">
+<article style="border:1px solid #e8e8e8;border-radius:10px;padding:14px 14px 12px 14px;background:#ffffff;">
+<p style="margin:0 0 6px 0;font-size:17px;font-weight:700;color:#111111;line-height:1.35;">${esc(a.title)}</p>
+<p style="margin:0 0 9px 0;color:#404040;line-height:1.5;font-size:14px;">${summary}</p>
+<p style="margin:0;color:#888888;font-size:12px;">${esc(formatDate(a.published_at))}</p>
+<p style="margin:10px 0 0 0;"><a href="${esc(a.original_url)}" style="color:#0b57d0;text-decoration:underline;font-size:13px;">Read more</a></p>
+</article>
 </li>`;
 };
 
 const buildSection = (title: string, body: string): string => `<section style="margin:0 0 26px 0;">
-<h2 style="margin:0 0 12px 0;font-size:20px;color:#111111;">${esc(title)}</h2>
+<h2 style="margin:0 0 12px 0;font-size:20px;color:#111111;letter-spacing:-0.2px;">${esc(title)}</h2>
 ${body}
 </section>`;
 
@@ -124,23 +126,36 @@ export const buildNewsletterHtml = (params: {
     params.subscriberIdForTemplate,
   );
 
+  const teamColor = params.team.primary_color || "#111111";
   const html = `<!doctype html>
 <html>
-  <body style="font-family:Arial,Helvetica,sans-serif;background:#ffffff;color:#111111;padding:20px;">
-    <main style="max-width:700px;margin:0 auto;">
-      <h1 style="margin:0 0 8px 0;">${esc(params.team.city)} ${esc(params.team.name)} Daily Briefing</h1>
-      <p style="margin:0 0 20px 0;color:#555555;">A 5-minute morning read from Football Wire.</p>
-      ${sections.join("\n")}
-      <section style="margin:18px 0 0 0;border-top:1px solid #e8e8e8;padding-top:14px;">
-        <p style="margin:0 0 10px 0;">Was this issue useful?</p>
-        <p style="margin:0 0 8px 0;">
-          <a href="${esc(tracking.thumbsUpUrl)}">👍 Helpful</a> ·
-          <a href="${esc(tracking.thumbsDownUrl)}">👎 Not helpful</a>
-        </p>
-        <p style="margin:0;">
-          <a href="${esc(tracking.unsubscribeUrl)}">Unsubscribe instantly</a>
-        </p>
+  <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f6f6;color:#111111;padding:20px;">
+    <main style="max-width:700px;margin:0 auto;background:#ffffff;border:1px solid #e8e8e8;border-radius:14px;overflow:hidden;">
+      <header style="padding:14px 20px;background:#f2f2f0;border-bottom:1px solid #e8e8e8;">
+        <p style="margin:0;font-size:11px;letter-spacing:1px;color:#666666;font-weight:700;">FOOTBALLWIRE</p>
+      </header>
+      <section style="padding:18px 20px 8px 20px;border-top:4px solid ${esc(teamColor)};">
+        <h1 style="margin:0 0 8px 0;font-size:34px;line-height:1.15;">${esc(params.team.city)} ${esc(params.team.name)} Daily Briefing</h1>
+        <p style="margin:0;color:#666666;font-size:15px;">A 5-minute morning read from Football Wire.</p>
       </section>
+      <section style="padding:16px 20px 2px 20px;">
+      ${sections.join("\n")}
+      </section>
+      <section style="margin:18px 0 0 0;border-top:1px solid #e8e8e8;padding-top:14px;">
+        <section style="padding:0 20px 20px 20px;">
+          <p style="margin:0 0 10px 0;font-weight:600;">Was this issue useful?</p>
+          <p style="margin:0 0 10px 0;">
+            <a href="${esc(tracking.thumbsUpUrl)}" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#f2f2f0;border:1px solid #e8e8e8;color:#111111;text-decoration:none;">Helpful</a>
+            <a href="${esc(tracking.thumbsDownUrl)}" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#f2f2f0;border:1px solid #e8e8e8;color:#111111;text-decoration:none;margin-left:8px;">Not helpful</a>
+          </p>
+          <p style="margin:0;">
+            <a href="${esc(tracking.unsubscribeUrl)}" style="color:#666666;font-size:12px;text-decoration:underline;">Unsubscribe instantly</a>
+          </p>
+        </section>
+      </section>
+      <footer style="padding:14px 20px;border-top:1px solid #e8e8e8;background:#fbfbfb;color:#888888;font-size:12px;">
+        FootballWire | Daily team briefings
+      </footer>
     </main>
     <img src="${esc(tracking.openPixelUrl)}" alt="" width="1" height="1" style="display:block;border:0;opacity:0;" />
   </body>

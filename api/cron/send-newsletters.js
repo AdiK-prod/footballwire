@@ -32,6 +32,9 @@ var config = {
   get resendFrom() {
     return str(serverEnv()?.RESEND_FROM);
   },
+  get resendDisplayName() {
+    return str(serverEnv()?.RESEND_DISPLAY_NAME) || "FootballWire";
+  },
   get adminAlertEmail() {
     return str(serverEnv()?.ADMIN_ALERT_EMAIL);
   },
@@ -200,7 +203,7 @@ var sendViaResend = async (params) => {
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
     },
     body: JSON.stringify({
-      from: config.resendFrom,
+      from: `${config.resendDisplayName} <${config.resendFrom}>`,
       to: [params.to],
       subject: params.subject,
       html: params.html

@@ -56,6 +56,9 @@ export const config = {
   get resendFrom(): string {
     return str(serverEnv()?.RESEND_FROM);
   },
+  get resendDisplayName(): string {
+    return str(serverEnv()?.RESEND_DISPLAY_NAME) || "FootballWire";
+  },
   get adminAlertEmail(): string {
     return str(serverEnv()?.ADMIN_ALERT_EMAIL);
   },
