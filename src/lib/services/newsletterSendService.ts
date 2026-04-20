@@ -65,7 +65,7 @@ const sendViaResend = async (params: {
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     },
     body: JSON.stringify({
-      from: config.resendFrom,
+      from: `${config.resendDisplayName} <${config.resendFrom}>`,
       to: [params.to],
       subject: params.subject,
       html: params.html,
