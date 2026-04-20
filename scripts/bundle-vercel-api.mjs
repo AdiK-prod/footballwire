@@ -22,6 +22,22 @@ const bundles = [
     entry: join(root, "server/vercel/validate-source.ts"),
     outfile: join(root, "api/validate-source.js"),
   },
+  {
+    entry: join(root, "server/vercel/send-newsletters.ts"),
+    outfile: join(root, "api/cron/send-newsletters.js"),
+  },
+  {
+    entry: join(root, "server/vercel/track-open.ts"),
+    outfile: join(root, "api/track/open.js"),
+  },
+  {
+    entry: join(root, "server/vercel/track-feedback.ts"),
+    outfile: join(root, "api/track/feedback.js"),
+  },
+  {
+    entry: join(root, "server/vercel/unsubscribe.ts"),
+    outfile: join(root, "api/unsubscribe.js"),
+  },
 ];
 
 for (const { entry, outfile } of bundles) {

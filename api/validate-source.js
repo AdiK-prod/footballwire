@@ -13807,6 +13807,15 @@ var config2 = {
   },
   get adminAlertEmail() {
     return str(serverEnv()?.ADMIN_ALERT_EMAIL);
+  },
+  get appBaseUrl() {
+    return str(serverEnv()?.APP_BASE_URL) || str(serverEnv()?.NEXT_PUBLIC_APP_BASE_URL) || "https://www.footballwire.uk";
+  },
+  get trackingSecret() {
+    return str(serverEnv()?.TRACKING_SECRET);
+  },
+  get unsubscribeSecret() {
+    return str(serverEnv()?.UNSUBSCRIBE_SECRET) || str(serverEnv()?.TRACKING_SECRET);
   }
 };
 

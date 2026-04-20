@@ -26,6 +26,8 @@ import {
   listApprovedSourcesForTeam,
 } from "../db/pipelineDb";
 import { getServiceRoleClient } from "../supabase/server";
+import { createDraftFromSelectedArticles } from "../services/newsletterAssemblyService";
+import { config } from "../config";
 
 type Enriched = {
   source: ApprovedSourceRow;
@@ -374,6 +376,36 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
       articles: articlesPayload,
       logs: scoreLogs,
     });
+
+    if (articlesPayload.length > 0) {
+      try {
+        await createDraftFromSelectedArticles({
+          team,
+          selectedArticles: articlesPayload
+            .map((a) => ({
+              id: urlToId.get(a.original_url) ?? 0,
+              title: a.title,
+              ai_summary: a.ai_summary,
+              original_url: a.original_url,
+              category: a.category as ArticleCategory,
+              published_at: a.published_at,
+            }))
+            .filter((a) => a.id > 0),
+          pipelineNotes: statHit
+            ? JSON.stringify({
+                statSnippet: statHit.snippet,
+                statArticleId: urlToId.get(statHit.article.link) ?? null,
+              })
+            : null,
+          appBaseUrl: config.appBaseUrl,
+        });
+      } catch (draftError) {
+        pipelineInfo("newsletter_draft_failed", {
+          teamId,
+          message: draftError instanceof Error ? draftError.message : "unknown",
+        });
+      }
+    }
 
     let notes: string | null = null;
     if (statHit) {
