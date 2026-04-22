@@ -8,7 +8,7 @@ a curated 5-minute morning briefing every day.
 - Sending: newsletter@mail.footballwire.uk
 - Subscriber app: footballwire.uk
 - Admin dashboard: footballwire.uk/admin
-- PRD: prd_v2.md
+- PRD: prd_v3.md
 - Backlog: BACKLOG.md
 
 ---
@@ -25,7 +25,7 @@ a curated 5-minute morning briefing every day.
 
 ## Current Phase
 
-Phase 1 — Foundation
+Phases 1–4 complete. Phase 5 (Admin Dashboard) — next.
 
 Update this line when a phase is confirmed complete by the user.
 
@@ -39,7 +39,7 @@ Mark each task [x] in BACKLOG.md immediately upon completion.
 Move completed tasks to the Completed section in BACKLOG.md.
 
 **When the phase is fully complete:**
-1. Verify every DoD checkbox in prd_v2.md for that phase
+1. Verify every DoD checkbox in prd_v3.md for that phase
 2. For checkboxes that can be verified programmatically (migrations ran, indexes exist, build passes) — verify and mark them
 3. For checkboxes that require human confirmation (app runs locally, Vercel deployed, email renders) — list them explicitly and wait
 4. Report a clear summary of what was built
@@ -57,7 +57,7 @@ Move completed tasks to the Completed section in BACKLOG.md.
 - Routine file creation, component building, schema migrations
 - Stylistic or naming decisions already covered by rules in this file
 - Test failures that are fixable — fix and continue
-- Decisions already answered by CLAUDE.md or prd_v2.md
+- Decisions already answered by CLAUDE.md or prd_v3.md
 - Display bugs discovered mid-task — fix them and continue
 
 ---
@@ -112,14 +112,28 @@ Move completed tasks to the Completed section in BACKLOG.md.
 - pipeline_runs row: created at start (status: partial), closed at end (completed | failed)
 - Failure path always closes pipeline_runs row with status: failed + error message
 
-**Current scoring reality (Phase 1-7):**
-Article scoring is currently category-derived with fixed composite scores —
-not real per-article AI scoring. Do not assume Claude scoring calls exist
-in the pipeline until Phase 8 is explicitly built. Phase 8 upgrades this
-to true per-article 4-dimension Claude API scoring.
+**Step 2 Filter — relevance gate (v3 requirement):**
+- Non-NFL keyword pre-filter on title: discard if title contains ufl, mls, mlb, nba, nhl, golf, soccer, tennis, cricket, college football, ncaa
+- Same-day URL deduplication: skip URLs already in article_scores_log for this team + fetch_date
+- Claude team relevance check per article: `checkTeamRelevance` in `src/lib/ai/claudePipeline.ts`
+  - General source: relevant=true AND confidence >= 70
+  - Team-specific source: relevant=true AND confidence >= 50
+  - Claude API failure → default to not_relevant — never pass articles through on error
+- Articles that fail relevance: logged with rejection_reason = not_relevant, selection_reasoning = "Rejected: not_relevant — [reasoning]"
+
+**Current scoring reality (Phases 1–7):**
+Article scoring is category-derived with fixed composite scores — not per-article AI scoring.
+Phase 8 replaces this with true 4-dimension Claude API scoring.
+The `checkTeamRelevance` call IS a Claude API call (relevance gate, not scoring).
+
+**selection_reasoning format (Phase 3 deterministic strings):**
+- Selected: `Selected: [category] article (score: [score])`
+- Rejected quality gate: `Rejected: quality_gate (word_count)` or `Rejected: quality_gate (unreachable)`
+- Rejected not relevant: `Rejected: not_relevant — [Claude reasoning]`
+- Rejected duplicate: `Rejected: duplicate`
+- Rejected below threshold: `Rejected: below_threshold (score: [score], threshold: [threshold])`
 
 **Newsletter slot selection (current implementation):**
-- Category priority: transaction → injury → game_analysis → rumor → general
 - Lead story: first non-injury article in sorted list
 - Quick hits: next 4 non-injury articles (total 5 articles including lead)
 - Injury block: all injury-tagged articles
@@ -175,7 +189,7 @@ to true per-article 4-dimension Claude API scoring.
 ## Design Compliance
 
 Design is a hard requirement — not optional context. Every UI component
-must match the design system defined in prd_v2.md before a task is
+must match the design system defined in prd_v3.md before a task is
 considered complete.
 
 **Token rules — apply exactly:**
