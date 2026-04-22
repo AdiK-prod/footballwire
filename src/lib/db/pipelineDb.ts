@@ -63,6 +63,34 @@ export const getTeamById = async (teamId: number): Promise<Team> => {
   return data as Team;
 };
 
+/**
+ * Same-day URL deduplication: returns URLs already logged for this team today.
+ * Prevents re-processing the same articles when pipeline is invoked multiple times per day.
+ */
+export const getAlreadyProcessedUrlsToday = async (
+  teamId: number,
+  fetchDate: string,
+): Promise<Set<string>> => {
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from("article_scores_log")
+    .select("original_url")
+    .eq("team_id", teamId)
+    .eq("fetch_date", fetchDate);
+
+  if (error) {
+    throw new Error(`same-day dedup query failed: ${error.message}`);
+  }
+
+  const urls = new Set<string>();
+  for (const row of data ?? []) {
+    if (typeof row.original_url === "string") {
+      urls.add(row.original_url);
+    }
+  }
+  return urls;
+};
+
 export const createPipelineRun = async (teamId: number) => {
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase

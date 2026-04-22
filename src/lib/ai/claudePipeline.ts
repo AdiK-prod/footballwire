@@ -50,6 +50,45 @@ const postClaude = async (system: string, user: string, maxTokens: number) => {
 };
 
 /**
+ * Step 2 Filter — Claude team relevance gate.
+ * General sources: relevant=true AND confidence >= 70.
+ * Team-specific sources: relevant=true AND confidence >= 50.
+ * Parse failure defaults to not_relevant (never passes articles through on error).
+ */
+export const checkTeamRelevance = async (params: {
+  teamDisplayName: string;
+  title: string;
+  bodyExcerpt: string;
+  isGeneralSource: boolean;
+}): Promise<{ relevant: boolean; confidence: number; reasoning: string }> => {
+  const confidenceThreshold = params.isGeneralSource ? 70 : 50;
+  let raw = "";
+  try {
+    raw = await postClaude(
+      "You assess NFL article team relevance. Reply JSON only.",
+      `Is the ${params.teamDisplayName} a PRIMARY subject of this article?\n` +
+        `PRIMARY means: the article is substantially about this team, their players, coaches, or front office decisions. A passing mention does not count.\n\n` +
+        `Article title: ${params.title}\n` +
+        `Article body excerpt: ${params.bodyExcerpt.slice(0, 1000)}\n\n` +
+        `Reply JSON only: { "relevant": boolean, "confidence": 0-100, "reasoning": "one sentence" }`,
+      150,
+    );
+    const parsed = JSON.parse(stripJsonFences(raw)) as {
+      relevant?: boolean;
+      confidence?: number;
+      reasoning?: string;
+    };
+    const relevant = Boolean(parsed.relevant);
+    const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+    const reasoning = typeof parsed.reasoning === "string" ? parsed.reasoning.trim() : "";
+    const passes = relevant && confidence >= confidenceThreshold;
+    return { relevant: passes, confidence, reasoning };
+  } catch {
+    return { relevant: false, confidence: 0, reasoning: "parse_error" };
+  }
+};
+
+/**
  * Phase 3 — category only (Phases 1–7). Composite comes from fixed weights in articleCategory.
  * Four dimension scores are Phase 8.
  */

@@ -108,6 +108,20 @@ var getTeamById = async (teamId) => {
   }
   return data;
 };
+var getAlreadyProcessedUrlsToday = async (teamId, fetchDate) => {
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.from("article_scores_log").select("original_url").eq("team_id", teamId).eq("fetch_date", fetchDate);
+  if (error) {
+    throw new Error(`same-day dedup query failed: ${error.message}`);
+  }
+  const urls = /* @__PURE__ */ new Set();
+  for (const row of data ?? []) {
+    if (typeof row.original_url === "string") {
+      urls.add(row.original_url);
+    }
+  }
+  return urls;
+};
 var createPipelineRun = async (teamId) => {
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase.from("pipeline_runs").insert({
@@ -200,6 +214,31 @@ var postClaude = async (system, user, maxTokens) => {
   }
   const payload = await response.json();
   return payload.content?.find((item) => item.type === "text")?.text ?? "";
+};
+var checkTeamRelevance = async (params) => {
+  const confidenceThreshold = params.isGeneralSource ? 70 : 50;
+  let raw = "";
+  try {
+    raw = await postClaude(
+      "You assess NFL article team relevance. Reply JSON only.",
+      `Is the ${params.teamDisplayName} a PRIMARY subject of this article?
+PRIMARY means: the article is substantially about this team, their players, coaches, or front office decisions. A passing mention does not count.
+
+Article title: ${params.title}
+Article body excerpt: ${params.bodyExcerpt.slice(0, 1e3)}
+
+Reply JSON only: { "relevant": boolean, "confidence": 0-100, "reasoning": "one sentence" }`,
+      150
+    );
+    const parsed = JSON.parse(stripJsonFences(raw));
+    const relevant = Boolean(parsed.relevant);
+    const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+    const reasoning = typeof parsed.reasoning === "string" ? parsed.reasoning.trim() : "";
+    const passes = relevant && confidence >= confidenceThreshold;
+    return { relevant: passes, confidence, reasoning };
+  } catch {
+    return { relevant: false, confidence: 0, reasoning: "parse_error" };
+  }
 };
 var classifyArticleCategory = async (params) => {
   const text = await postClaude(
@@ -482,22 +521,6 @@ var upsertArticlesAndInsertScoreLogs = async (supabase, params) => {
   return urlToId;
 };
 
-// src/lib/pipeline/teamMention.ts
-var textMentionsTeam = (text, team) => {
-  const t = text.toLowerCase();
-  const city = team.city.toLowerCase();
-  const name = team.name.toLowerCase();
-  const abbr = team.abbreviation.toLowerCase();
-  if (t.includes(city) || t.includes(name) || t.includes(abbr)) {
-    return true;
-  }
-  const nickname = name.replace(/\s+/g, "");
-  if (nickname.length >= 4 && t.includes(nickname)) {
-    return true;
-  }
-  return false;
-};
-
 // src/lib/db/newsletterDb.ts
 var withClient = (client) => client ?? getServiceRoleClient();
 var createDraftNewsletter = async (draft, client) => {
@@ -511,129 +534,187 @@ var createDraftNewsletter = async (draft, client) => {
 
 // src/lib/services/newsletterAssemblyService.ts
 var esc = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-var formatDate = (iso) => {
+var formatShortDate = (iso) => {
   try {
-    return new Date(iso).toLocaleString("en-US", {
+    return new Date(iso).toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: "UTC",
-      timeZoneName: "short"
+      timeZone: "UTC"
     });
   } catch {
     return iso;
   }
 };
-var buildArticleRow = (a) => {
-  const summary = a.ai_summary ? esc(a.ai_summary) : "Summary unavailable.";
-  return `<li style="margin:0 0 14px 0;list-style:none;">
-<article style="border:1px solid #e8e8e8;border-radius:10px;padding:14px 14px 12px 14px;background:#ffffff;">
-<p style="margin:0 0 6px 0;font-size:17px;font-weight:700;color:#111111;line-height:1.35;">${esc(a.title)}</p>
-<p style="margin:0 0 9px 0;color:#404040;line-height:1.5;font-size:14px;">${summary}</p>
-<p style="margin:0;color:#888888;font-size:12px;">${esc(formatDate(a.published_at))}</p>
-<p style="margin:10px 0 0 0;"><a href="${esc(a.original_url)}" style="color:#0b57d0;text-decoration:underline;font-size:13px;">Read more</a></p>
-</article>
-</li>`;
-};
-var buildSection = (title, body) => `<section style="margin:0 0 26px 0;">
-<h2 style="margin:0 0 12px 0;font-size:20px;color:#111111;letter-spacing:-0.2px;">${esc(title)}</h2>
-${body}
-</section>`;
-var extractStat = (note) => {
-  if (!note) {
-    return null;
+var formatLongDate = (iso) => {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC"
+    });
+  } catch {
+    return iso;
   }
+};
+var extractStat = (note) => {
+  if (!note) return null;
   try {
     const parsed = JSON.parse(note);
-    return parsed.statSnippet?.trim() || null;
+    const snippet = parsed.statSnippet?.trim();
+    if (!snippet) return null;
+    return { snippet, sourceName: parsed.statSourceName ?? null };
   } catch {
     return null;
   }
 };
+var sectionLabel = (text, bgColor) => `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td style="background:${bgColor};padding:8px 32px;">
+<span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#ffffff;line-height:1;">${esc(text)}</span>
+</td></tr></table>`;
+var buildTopStory = (a, teamColor) => {
+  const summary = a.ai_summary ? esc(a.ai_summary) : "";
+  const meta = `${esc(a.source_name)} \xB7 ${esc(formatShortDate(a.published_at))}`;
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td style="background:#ffffff;padding:24px 32px;">
+<p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:20px;font-weight:700;color:#111111;line-height:1.2;">${esc(a.title)}</p>
+${summary ? `<p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:400;color:#444444;line-height:1.6;">${summary}</p>` : ""}
+<p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#888888;line-height:1.4;">${meta}</p>
+<p style="margin:0;"><a href="${esc(a.original_url)}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:${teamColor};text-decoration:none;">Read more &#8594;</a></p>
+</td></tr></table>`;
+};
+var buildQuickHit = (a, teamColor, isLast) => {
+  const summary = a.ai_summary ? esc(a.ai_summary) : "";
+  const meta = `${esc(a.source_name)} \xB7 ${esc(formatShortDate(a.published_at))}`;
+  const borderBottom = isLast ? "" : "border-bottom:1px solid #eeeeee;";
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td width="3" style="background:${teamColor};width:3px;"></td>
+<td style="background:#f9f9f9;padding:16px 32px 16px 20px;${borderBottom}">
+<p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:16px;font-weight:600;color:#111111;line-height:1.3;">${esc(a.title)}</p>
+${summary ? `<p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:400;color:#444444;line-height:1.55;">${summary}</p>` : ""}
+<p style="margin:0 0 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#888888;line-height:1.4;">${meta}</p>
+<p style="margin:0;"><a href="${esc(a.original_url)}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:${teamColor};text-decoration:none;">Read more &#8594;</a></p>
+</td></tr></table>`;
+};
+var buildInjuryRow = (a, isLast) => {
+  const summary = a.ai_summary ? esc(a.ai_summary) : "";
+  const borderBottom = isLast ? "" : "border-bottom:1px solid #fecaca;";
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td style="background:#fff5f5;padding:16px 32px;${borderBottom}">
+<p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:600;color:#111111;line-height:1.3;">
+<span style="color:#dc2626;margin-right:6px;">&#9679;</span>${esc(a.title)}</p>
+${summary ? `<p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;color:#666666;line-height:1.5;">${summary}</p>` : ""}
+<p style="margin:0;"><a href="${esc(a.original_url)}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#dc2626;text-decoration:none;">Read more &#8594;</a></p>
+</td></tr></table>`;
+};
+var buildStatBlock = (snippet, sourceName, teamColor) => `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td style="background:#ffffff;padding:28px 32px;text-align:center;">
+<p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:40px;font-weight:700;color:${teamColor};line-height:1.1;">${esc(snippet)}</p>
+${sourceName ? `<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#888888;line-height:1.4;">Source: ${esc(sourceName)}</p>` : ""}
+</td></tr></table>`;
+var buildLightNewsDayNotice = (teamDisplayName) => `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td style="background:#fffbeb;border:1px solid #fde68a;padding:14px 32px;">
+<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;color:#92400e;line-height:1.5;">
+&#9888; Light news day for ${esc(teamDisplayName)} &#8212; Limited verified coverage today.</p>
+</td></tr></table>`;
 var buildNewsletterHtml = (params) => {
+  const teamColor = params.team.primary_color || "#111111";
+  const teamDisplayName = `${params.team.city} ${params.team.name}`;
+  const dateStr = formatLongDate((/* @__PURE__ */ new Date()).toISOString());
   const nonInjury = params.selectedArticles.filter((a) => a.category !== "injury");
   const lead = nonInjury[0];
   const quick = nonInjury.slice(1, 5);
   const injuries = params.selectedArticles.filter((a) => a.category === "injury");
-  const stat = extractStat(params.pipelineNotes);
-  const sections = [];
-  if (lead) {
-    sections.push(buildSection("Top Story", `<ul style="padding-left:18px;margin:0;">${buildArticleRow(lead)}</ul>`));
-  }
-  if (quick.length > 0) {
-    sections.push(
-      buildSection(
-        "Quick Hits",
-        `<ul style="padding-left:18px;margin:0;">${quick.map(buildArticleRow).join("")}</ul>`
-      )
-    );
-  }
-  if (injuries.length > 0) {
-    sections.push(
-      buildSection(
-        "Injury Report",
-        `<ul style="padding-left:18px;margin:0;">${injuries.map(buildArticleRow).join("")}</ul>`
-      )
-    );
-  }
-  if (stat) {
-    sections.push(
-      buildSection(
-        "Stat of the Day",
-        `<p style="margin:0;color:#222222;font-size:16px;"><strong>${esc(stat)}</strong></p>`
-      )
-    );
-  }
-  if (params.selectedArticles.length < 3) {
-    sections.push(
-      buildSection(
-        "Note",
-        '<p style="margin:0;color:#666666;">Reduced newsletter today due to limited verified coverage.</p>'
-      )
-    );
-  }
+  const statData = extractStat(params.pipelineNotes);
   const tracking = params.trackingFor(
     params.newsletterIdForTemplate,
     params.subscriberIdForTemplate
   );
-  const teamColor = params.team.primary_color || "#111111";
-  const html = `<!doctype html>
-<html>
-  <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f6f6;color:#111111;padding:20px;">
-    <main style="max-width:700px;margin:0 auto;background:#ffffff;border:1px solid #e8e8e8;border-radius:14px;overflow:hidden;">
-      <header style="padding:14px 20px;background:#f2f2f0;border-bottom:1px solid #e8e8e8;">
-        <p style="margin:0;font-size:11px;letter-spacing:1px;color:#666666;font-weight:700;">FOOTBALLWIRE</p>
-      </header>
-      <section style="padding:18px 20px 8px 20px;border-top:4px solid ${esc(teamColor)};">
-        <h1 style="margin:0 0 8px 0;font-size:34px;line-height:1.15;">${esc(params.team.city)} ${esc(params.team.name)} Daily Briefing</h1>
-        <p style="margin:0;color:#666666;font-size:15px;">A 5-minute morning read from Football Wire.</p>
-      </section>
-      <section style="padding:16px 20px 2px 20px;">
-      ${sections.join("\n")}
-      </section>
-      <section style="margin:18px 0 0 0;border-top:1px solid #e8e8e8;padding-top:14px;">
-        <section style="padding:0 20px 20px 20px;">
-          <p style="margin:0 0 10px 0;font-weight:600;">Was this issue useful?</p>
-          <p style="margin:0 0 10px 0;">
-            <a href="${esc(tracking.thumbsUpUrl)}" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#f2f2f0;border:1px solid #e8e8e8;color:#111111;text-decoration:none;">Helpful</a>
-            <a href="${esc(tracking.thumbsDownUrl)}" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#f2f2f0;border:1px solid #e8e8e8;color:#111111;text-decoration:none;margin-left:8px;">Not helpful</a>
-          </p>
-          <p style="margin:0;">
-            <a href="${esc(tracking.unsubscribeUrl)}" style="color:#666666;font-size:12px;text-decoration:underline;">Unsubscribe instantly</a>
-          </p>
-        </section>
-      </section>
-      <footer style="padding:14px 20px;border-top:1px solid #e8e8e8;background:#fbfbfb;color:#888888;font-size:12px;">
-        FootballWire | Daily team briefings
-      </footer>
-    </main>
-    <img src="${esc(tracking.openPixelUrl)}" alt="" width="1" height="1" style="display:block;border:0;opacity:0;" />
-  </body>
+  const bodyBlocks = [];
+  if (params.selectedArticles.length < 3) {
+    bodyBlocks.push(buildLightNewsDayNotice(teamDisplayName));
+  }
+  if (lead) {
+    bodyBlocks.push(sectionLabel("TOP STORY", teamColor));
+    bodyBlocks.push(buildTopStory(lead, teamColor));
+  }
+  if (quick.length > 0) {
+    bodyBlocks.push(sectionLabel("QUICK HITS", teamColor));
+    quick.forEach((a, i) => {
+      bodyBlocks.push(buildQuickHit(a, teamColor, i === quick.length - 1));
+    });
+  }
+  if (injuries.length > 0) {
+    bodyBlocks.push(sectionLabel("INJURY REPORT", "#dc2626"));
+    injuries.forEach((a, i) => {
+      bodyBlocks.push(buildInjuryRow(a, i === injuries.length - 1));
+    });
+  }
+  if (statData) {
+    bodyBlocks.push(sectionLabel("STAT OF THE DAY", teamColor));
+    bodyBlocks.push(buildStatBlock(statData.snippet, statData.sourceName, teamColor));
+  }
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;">
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+<tr><td align="center" style="padding:20px 0;">
+
+<table width="600" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;width:100%;background:#ffffff;">
+
+<!-- HEADER -->
+<tr><td style="background:#111111;padding:28px 32px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+<tr><td>
+<p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#ffffff;line-height:1;">FOOTBALLWIRE</p>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+<tr><td height="3" style="height:3px;background:${teamColor};font-size:0;line-height:0;">&nbsp;</td></tr>
+</table>
+<p style="margin:10px 0 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">${esc(teamDisplayName)} Daily Briefing</p>
+<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:12px;color:#999999;line-height:1.4;">${esc(dateStr)} &middot; 5-min read</p>
+</td></tr>
+</table>
+</td></tr>
+
+<!-- BODY CONTENT -->
+<tr><td>
+${bodyBlocks.join("\n")}
+</td></tr>
+
+<!-- FOOTER -->
+<tr><td style="background:#f4f4f4;border-top:1px solid #e0e0e0;padding:24px 32px;text-align:center;">
+<p style="margin:0 0 14px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;color:#888888;line-height:1.4;">Was this useful?</p>
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" align="center" style="margin:0 auto 16px auto;">
+<tr>
+<td style="padding-right:8px;">
+<a href="${esc(tracking.thumbsUpUrl)}" style="display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;color:#444444;text-decoration:none;border:1px solid #dddddd;background:#ffffff;padding:8px 20px;border-radius:4px;">&#128077; Yes</a>
+</td>
+<td>
+<a href="${esc(tracking.thumbsDownUrl)}" style="display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;color:#444444;text-decoration:none;border:1px solid #dddddd;background:#ffffff;padding:8px 20px;border-radius:4px;">&#128078; No</a>
+</td>
+</tr>
+</table>
+<p style="margin:0 0 8px 0;">
+<a href="${esc(tracking.unsubscribeUrl)}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#888888;text-decoration:none;">Unsubscribe</a>
+<span style="color:#bbbbbb;margin:0 6px;">&#183;</span>
+<a href="${esc(params.appBaseUrl)}/submit-source" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#888888;text-decoration:none;">Submit a source</a>
+</p>
+<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#bbbbbb;line-height:1.4;">FOOTBALLWIRE &middot; Daily team briefings</p>
+</td></tr>
+
+</table>
+
+</td></tr>
+</table>
+
+<img src="${esc(tracking.openPixelUrl)}" alt="" width="1" height="1" style="display:block;border:0;width:1px;height:1px;" />
+</body>
 </html>`;
   return {
-    subject: `${params.team.city} ${params.team.name} | Daily Briefing`,
+    subject: `${teamDisplayName} | Daily Briefing`,
     html
   };
 };
@@ -671,6 +752,23 @@ var createDraftFromSelectedArticles = async (params) => {
 // src/lib/pipeline/runTeamPipeline.ts
 var pipelineInfo = (msg, extra) => {
   console.info(JSON.stringify({ scope: "pipeline", msg, ...extra }));
+};
+var NON_NFL_KEYWORDS = [
+  "ufl",
+  "mls",
+  "mlb",
+  "nba",
+  "nhl",
+  "golf",
+  "soccer",
+  "tennis",
+  "cricket",
+  "college football",
+  "ncaa"
+];
+var isNonNflContent = (title) => {
+  const lower = title.toLowerCase();
+  return NON_NFL_KEYWORDS.some((kw) => lower.includes(kw));
 };
 var summarizeWithRetries = async (params) => {
   let summaryVersion = 1;
@@ -713,29 +811,47 @@ var findStatFromArticles = (ordered) => {
   }
   return null;
 };
-var buildScoreLogs = (params) => params.attempts.map((e) => ({
-  pipeline_run_id: params.runId,
-  article_id: null,
-  team_id: params.teamId,
-  source_id: e.source.id,
-  source_name: e.source.name,
-  source_type: e.source.type,
-  fetch_date: params.fetchDate,
-  headline: e.title,
-  original_url: e.link,
-  word_count: e.wordCount,
-  relevance_score: null,
-  significance_score: null,
-  credibility_score: null,
-  uniqueness_score: null,
-  composite_score: e.compositeScore,
-  selection_reasoning: null,
-  rejection_reason: params.duplicateUrls.has(e.link) ? "duplicate" : e.rejectionReason,
-  passed_quality_gate: e.passedQuality,
-  passed_threshold: e.passedThreshold,
-  threshold_at_time: e.thresholdUsed,
-  summary_generated: false
-}));
+var buildScoreLogs = (params) => params.attempts.map((e) => {
+  const isSelected = params.selectedUrls.has(e.link);
+  const isDuplicate = params.duplicateUrls.has(e.link);
+  let selectionReasoning;
+  if (isSelected) {
+    selectionReasoning = `Selected: ${e.category} article (score: ${e.compositeScore})`;
+  } else if (isDuplicate) {
+    selectionReasoning = `Rejected: duplicate`;
+  } else if (!e.passedQuality) {
+    const detail = e.rejectionReason?.includes("unreachable") ? "unreachable" : "word_count";
+    selectionReasoning = `Rejected: quality_gate (${detail})`;
+  } else if (!e.relevantToTeam) {
+    const reasoning = e.relevanceReasoning ?? "not_relevant";
+    selectionReasoning = `Rejected: not_relevant \u2014 ${reasoning}`;
+  } else {
+    selectionReasoning = `Rejected: below_threshold (score: ${e.compositeScore}, threshold: ${e.thresholdUsed})`;
+  }
+  return {
+    pipeline_run_id: params.runId,
+    article_id: null,
+    team_id: params.teamId,
+    source_id: e.source.id,
+    source_name: e.source.name,
+    source_type: e.source.type,
+    fetch_date: params.fetchDate,
+    headline: e.title,
+    original_url: e.link,
+    word_count: e.wordCount,
+    relevance_score: null,
+    significance_score: null,
+    credibility_score: null,
+    uniqueness_score: null,
+    composite_score: e.compositeScore,
+    selection_reasoning: selectionReasoning,
+    rejection_reason: isDuplicate ? "duplicate" : e.rejectionReason,
+    passed_quality_gate: e.passedQuality,
+    passed_threshold: e.passedThreshold,
+    threshold_at_time: e.thresholdUsed,
+    summary_generated: false
+  };
+});
 var toRanked = (e) => ({
   ...e,
   sourceId: e.source.id
@@ -753,6 +869,7 @@ var runTeamPipeline = async (teamId) => {
     runId = await createPipelineRun(teamId);
     const fetchDate = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const supabase = getServiceRoleClient();
+    const teamDisplay = `${team.city} ${team.name}`;
     const sources = await listApprovedSourcesForTeam(teamId);
     if (sources.length === 0) {
       pipelineInfo("no_approved_sources", { teamId });
@@ -768,6 +885,17 @@ var runTeamPipeline = async (teamId) => {
       pipelineSucceeded = true;
       return;
     }
+    let alreadyProcessedUrls;
+    try {
+      alreadyProcessedUrls = await getAlreadyProcessedUrlsToday(teamId, fetchDate);
+    } catch (err) {
+      pipelineInfo("same_day_dedup_query_failed", {
+        teamId,
+        message: err instanceof Error ? err.message : "unknown"
+      });
+      alreadyProcessedUrls = /* @__PURE__ */ new Set();
+    }
+    const urlToSourceName = /* @__PURE__ */ new Map();
     for (const source of sources) {
       let items = [];
       try {
@@ -781,6 +909,11 @@ var runTeamPipeline = async (teamId) => {
       }
       for (const item of items) {
         articlesFetched += 1;
+        if (alreadyProcessedUrls.has(item.link)) {
+          pipelineInfo("same_day_dedup_skip", { teamId, url: item.link });
+          articlesFetched -= 1;
+          continue;
+        }
         const bodyRes = await fetchArticleHtml(item.link);
         if (!bodyRes.ok) {
           attempts.push({
@@ -791,20 +924,96 @@ var runTeamPipeline = async (teamId) => {
             rawText: null,
             wordCount: null,
             passedQuality: false,
-            mentionsTeam: false,
+            relevantToTeam: false,
+            relevanceReasoning: null,
             category: "general",
             compositeScore: getCompositeForCategory("general"),
             passedThreshold: false,
             thresholdUsed: getScoreThreshold(false),
-            rejectionReason: bodyRes.reason
+            rejectionReason: "quality_gate (unreachable)"
           });
           continue;
         }
         const rawText = stripHtmlToText(bodyRes.html);
         const wc = countWords(rawText);
-        const passedQuality = wc >= 200;
-        if (passedQuality) {
-          passedQualityCount += 1;
+        if (wc < 200) {
+          attempts.push({
+            source,
+            title: item.title,
+            link: item.link,
+            publishedAt: new Date(item.pubDate).toISOString(),
+            rawText,
+            wordCount: wc,
+            passedQuality: false,
+            relevantToTeam: false,
+            relevanceReasoning: null,
+            category: "general",
+            compositeScore: getCompositeForCategory("general"),
+            passedThreshold: false,
+            thresholdUsed: getScoreThreshold(false),
+            rejectionReason: "quality_gate (word_count)"
+          });
+          continue;
+        }
+        passedQualityCount += 1;
+        if (isNonNflContent(item.title)) {
+          attempts.push({
+            source,
+            title: item.title,
+            link: item.link,
+            publishedAt: new Date(item.pubDate).toISOString(),
+            rawText,
+            wordCount: wc,
+            passedQuality: true,
+            relevantToTeam: false,
+            relevanceReasoning: "non-NFL content",
+            category: "general",
+            compositeScore: getCompositeForCategory("general"),
+            passedThreshold: false,
+            thresholdUsed: getScoreThreshold(false),
+            rejectionReason: "not_relevant"
+          });
+          continue;
+        }
+        let relevantToTeam = false;
+        let relevanceReasoning = "";
+        const isGeneralSource = source.type === "general";
+        try {
+          const relResult = await checkTeamRelevance({
+            teamDisplayName: teamDisplay,
+            title: item.title,
+            bodyExcerpt: rawText,
+            isGeneralSource
+          });
+          relevantToTeam = relResult.relevant;
+          relevanceReasoning = relResult.reasoning;
+        } catch (err) {
+          pipelineInfo("relevance_claude_failed", {
+            teamId,
+            sourceId: source.id,
+            message: err instanceof Error ? err.message : "unknown"
+          });
+          relevantToTeam = false;
+          relevanceReasoning = "relevance_check_failed";
+        }
+        if (!relevantToTeam) {
+          attempts.push({
+            source,
+            title: item.title,
+            link: item.link,
+            publishedAt: new Date(item.pubDate).toISOString(),
+            rawText,
+            wordCount: wc,
+            passedQuality: true,
+            relevantToTeam: false,
+            relevanceReasoning: relevanceReasoning || "not_relevant",
+            category: "general",
+            compositeScore: getCompositeForCategory("general"),
+            passedThreshold: false,
+            thresholdUsed: getScoreThreshold(false),
+            rejectionReason: "not_relevant"
+          });
+          continue;
         }
         let category = "general";
         try {
@@ -822,10 +1031,9 @@ var runTeamPipeline = async (teamId) => {
         }
         const compositeScore = getCompositeForCategory(category);
         scoredCount += 1;
-        const mentions = source.type !== "general" ? true : textMentionsTeam(`${item.title}
-${rawText}`, team);
         const threshold = getScoreThreshold(false);
-        const passedThreshold = passedQuality && mentions && compositeScore >= threshold;
+        const passedThreshold = compositeScore >= threshold;
+        urlToSourceName.set(item.link, source.name);
         attempts.push({
           source,
           title: item.title,
@@ -833,21 +1041,21 @@ ${rawText}`, team);
           publishedAt: new Date(item.pubDate).toISOString(),
           rawText,
           wordCount: wc,
-          passedQuality,
-          mentionsTeam: mentions,
+          passedQuality: true,
+          relevantToTeam: true,
+          relevanceReasoning,
           category,
           compositeScore,
           passedThreshold,
           thresholdUsed: threshold,
-          rejectionReason: !passedQuality ? "quality_gate" : !mentions ? "team_filter" : !passedThreshold ? "below_threshold" : null
+          rejectionReason: passedThreshold ? null : "below_threshold"
         });
       }
     }
-    const teamDisplay = `${team.city} ${team.name}`;
-    const qualityPassedSorted = [...attempts.filter((a) => a.passedQuality)].sort(
-      (a, b) => b.compositeScore - a.compositeScore
-    );
-    const { kept, dropped } = await deduplicateByHeadlines(qualityPassedSorted);
+    const relevancePassedSorted = [
+      ...attempts.filter((a) => a.passedQuality && a.relevantToTeam)
+    ].sort((a, b) => b.compositeScore - a.compositeScore);
+    const { kept, dropped } = await deduplicateByHeadlines(relevancePassedSorted);
     const duplicateUrls = new Set(dropped.map((d) => d.link));
     const thresholdKept = kept.filter((k) => k.passedThreshold);
     const nonInjuryRanked = thresholdKept.filter((k) => k.category !== "injury").map(toRanked);
@@ -871,9 +1079,10 @@ ${rawText}`, team);
     for (const inj of injuries) {
       pushUnique(inj);
     }
+    const selectedUrls = new Set(toSummarize.map((a) => a.link));
     const articlesPayload = [];
     for (const item of toSummarize) {
-      if (!item.passedQuality || !item.mentionsTeam) {
+      if (!item.passedQuality || !item.relevantToTeam) {
         continue;
       }
       const bodyText = item.rawText ?? "";
@@ -897,7 +1106,7 @@ ${rawText}`, team);
         significance_score: null,
         credibility_score: null,
         uniqueness_score: null,
-        selection_reasoning: "selected_for_newsletter",
+        selection_reasoning: `Selected: ${item.category} article (score: ${item.compositeScore})`,
         rejection_reason: null,
         passed_threshold: true,
         summary_version: summaryVersion,
@@ -909,7 +1118,8 @@ ${rawText}`, team);
       teamId,
       fetchDate,
       attempts,
-      duplicateUrls
+      duplicateUrls,
+      selectedUrls
     });
     for (const log2 of scoreLogs) {
       if (articlesPayload.some((a) => a.original_url === log2.original_url)) {
@@ -929,7 +1139,7 @@ ${rawText}`, team);
       pipelineInfo("stat_snippet", { teamId, statLine: statHit.snippet });
     }
     const articlesSelected = toSummarize.filter(
-      (x) => x.passedQuality && x.mentionsTeam
+      (x) => x.passedQuality && x.relevantToTeam
     ).length;
     const urlToId = await upsertArticlesAndInsertScoreLogs(supabase, {
       articles: articlesPayload,
@@ -944,12 +1154,14 @@ ${rawText}`, team);
             title: a.title,
             ai_summary: a.ai_summary,
             original_url: a.original_url,
+            source_name: urlToSourceName.get(a.original_url) ?? "",
             category: a.category,
             published_at: a.published_at
           })).filter((a) => a.id > 0),
           pipelineNotes: statHit ? JSON.stringify({
             statSnippet: statHit.snippet,
-            statArticleId: urlToId.get(statHit.article.link) ?? null
+            statArticleId: urlToId.get(statHit.article.link) ?? null,
+            statSourceName: urlToSourceName.get(statHit.article.link) ?? null
           }) : null,
           appBaseUrl: config.appBaseUrl
         });

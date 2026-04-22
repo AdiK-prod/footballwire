@@ -3,6 +3,23 @@
 ## Active
 
 /
+
+---
+
+## Completed (prd_v3.md alignment)
+
+- [x] Read prd_v3.md and identify delta from v2 — prd_v3 alignment
+- [x] Add `checkTeamRelevance` Claude API call to `src/lib/ai/claudePipeline.ts` — prd_v3 alignment
+- [x] Add non-NFL keyword pre-filter on article title before relevance check — prd_v3 alignment
+- [x] Add same-day URL deduplication via `getAlreadyProcessedUrlsToday` in `pipelineDb.ts` — prd_v3 alignment
+- [x] Replace `textMentionsTeam` relevance with Claude `checkTeamRelevance` in `runTeamPipeline.ts` — prd_v3 alignment
+- [x] Dedup step now runs on relevance-passed articles only (not just quality-passed) — prd_v3 alignment
+- [x] Populate `selection_reasoning` deterministic strings on all `article_scores_log` rows — prd_v3 alignment
+- [x] Update `articlesPayload.selection_reasoning` to `Selected: [category] article (score: [score])` format — prd_v3 alignment
+- [x] Rebuild `buildNewsletterHtml` to v3 Email Design Specification (table layout, dark header, section labels, quick hit accent bar, injury section, stat block, footer buttons) — prd_v3 alignment
+- [x] Add `source_name` to `SelectedArticle` type and pass through from pipeline — prd_v3 alignment
+- [x] Update `CLAUDE.md`: PRD reference → prd_v3.md, add v3 filter rules, selection_reasoning format — prd_v3 alignment
+
 ---
 
 ## Completed
