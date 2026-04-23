@@ -6,6 +6,23 @@
 
 ---
 
+## Completed (Phase 5 — Admin Dashboard)
+
+- [x] Install react-router-dom; set up client-side routing in main.tsx — Phase 5
+- [x] Add SPA rewrite to vercel.json so /admin/* routes serve index.html — Phase 5
+- [x] Create browser Supabase client (src/lib/supabase/browser.ts) — Phase 5
+- [x] Create server-side session verifier (src/lib/auth/verifyAdminSession.ts) — Phase 5
+- [x] Create admin DB queries (src/lib/db/adminDb.ts): sources, newsletters, articles, subscriber stats — Phase 5
+- [x] Create Vercel admin API routes: /api/admin/sources (GET+POST), /api/admin/newsletters, /api/admin/subscribers, /api/admin/send-now — Phase 5
+- [x] Build AdminLogin page with Supabase magic link flow — Phase 5
+- [x] Build AdminApp layout with auth guard, tab navigation, logout — Phase 5
+- [x] Build SourceQueueTab: stat cards, filters, approve/reject actions, inline validation detail — Phase 5
+- [x] Build ContentPreviewTab: per-team newsletters with article scores, selection_reasoning, Send All Drafts — Phase 5
+- [x] Build SubscribersTab: summary stat cards, per-team table with open rate / satisfaction / churn, delivery failure alert — Phase 5
+- [x] Wire admin API bundles into bundle-vercel-api.mjs — Phase 5
+
+---
+
 ## Completed (prd_v3.md alignment)
 
 - [x] Read prd_v3.md and identify delta from v2 — prd_v3 alignment

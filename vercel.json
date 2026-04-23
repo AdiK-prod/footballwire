@@ -10,5 +10,8 @@
       "path": "/api/cron/send-newsletters",
       "schedule": "45 6 * * *"
     }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
