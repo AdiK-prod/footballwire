@@ -225,7 +225,14 @@ var postClaude = async (system, user, maxTokens) => {
     const detail = await formatAnthropicHttpError(response);
     throw new Error(`Claude API failed: ${detail}`);
   }
-  const payload = await response.json();
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    const raw = await response.text().catch(() => "");
+    const match = raw.match(/"text"\s*:\s*"([\s\S]*?)"\s*[},]/);
+    return match ? match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : "";
+  }
   return payload.content?.find((item) => item.type === "text")?.text ?? "";
 };
 var checkTeamRelevance = async (params) => {
