@@ -6,6 +6,7 @@ export type AdminSourceRow = {
   url: string;
   name: string;
   type: "general" | "team_specific" | "user_submitted";
+  feed_type: "news" | "blog";
   status: "pending" | "approved" | "rejected" | "flagged";
   relevance_score: number | null;
   validation_notes: string | null;
@@ -69,7 +70,7 @@ export const listAdminSources = async (params?: {
   let query = supabase
     .from("sources")
     .select(
-      "id, team_id, url, name, type, status, relevance_score, validation_notes, paywall_rate, submitted_by, created_at, teams(city, name, primary_color)",
+      "id, team_id, url, name, type, feed_type, status, relevance_score, validation_notes, paywall_rate, submitted_by, created_at, teams(city, name, primary_color)",
     )
     .order("created_at", { ascending: false })
     .limit(50);
@@ -101,6 +102,7 @@ export const listAdminSources = async (params?: {
       url: row.url,
       name: row.name,
       type: row.type as AdminSourceRow["type"],
+      feed_type: (row.feed_type as AdminSourceRow["feed_type"]) ?? "news",
       status: row.status as AdminSourceRow["status"],
       relevance_score: row.relevance_score,
       validation_notes: row.validation_notes,

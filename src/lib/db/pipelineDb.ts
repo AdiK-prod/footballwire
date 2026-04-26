@@ -27,6 +27,7 @@ export type ApprovedSourceRow = {
   url: string;
   name: string;
   type: "general" | "team_specific" | "user_submitted";
+  feed_type: "news" | "blog";
 };
 
 export const listApprovedSourcesForTeam = async (
@@ -35,7 +36,7 @@ export const listApprovedSourcesForTeam = async (
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from("sources")
-    .select("id, team_id, url, name, type")
+    .select("id, team_id, url, name, type, feed_type")
     .eq("status", "approved")
     .or(`team_id.is.null,team_id.eq.${teamId}`);
 
