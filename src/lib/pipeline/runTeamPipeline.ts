@@ -576,7 +576,11 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
     pipelineSucceeded = true;
   } catch (error) {
     lastError = error instanceof Error ? error.message : "pipeline failed";
-    pipelineInfo("team_pipeline_failed", { teamId, message: lastError });
+    const stack = error instanceof Error ? (error.stack ?? "no stack") : "no stack";
+    // Include first 3 stack frames in notes so error source is visible in DB
+    const stackSummary = stack.split("\n").slice(0, 4).join(" | ").slice(0, 500);
+    pipelineInfo("team_pipeline_failed", { teamId, message: lastError, stack: stackSummary });
+    lastError = `${lastError} | stack: ${stackSummary}`;
     throw error;
   } finally {
     if (runId > 0 && !pipelineSucceeded) {
