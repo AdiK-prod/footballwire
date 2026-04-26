@@ -186,3 +186,58 @@ export const checkContradiction = async (headline: string, summary: string) => {
   const parsed = safeJsonParse<{ contradicts?: boolean }>(text, {});
   return Boolean(parsed.contradicts);
 };
+
+export type ArticleCandidate = {
+  index: number;
+  title: string;
+  category: string;
+  compositeScore: number;
+  wordCount: number | null;
+  sourceType: string;
+};
+
+/**
+ * When more than `limit` articles pass all gates, ask Claude to pick the best
+ * ones for the newsletter and return their original indices in priority order.
+ * Falls back to the original order if the Claude call fails.
+ */
+export const selectAndRankArticles = async (params: {
+  teamDisplayName: string;
+  candidates: ArticleCandidate[];
+  limit: number;
+}): Promise<number[]> => {
+  if (params.candidates.length <= params.limit) {
+    return params.candidates.map((c) => c.index);
+  }
+
+  const list = params.candidates
+    .map(
+      (c) =>
+        `[${c.index}] "${c.title}" | category: ${c.category} | score: ${c.compositeScore} | words: ${c.wordCount ?? "?"} | source: ${c.sourceType}`,
+    )
+    .join("\n");
+
+  const raw = await postClaude(
+    "You are an NFL newsletter editor. Select the most valuable stories for a daily briefing. JSON only.",
+    `Pick the best ${params.limit} articles for a ${params.teamDisplayName} daily newsletter.\n` +
+      `Prefer: breaking news, transactions, injuries, and high-quality analysis. Avoid redundancy.\n\n` +
+      `Candidates:\n${list}\n\n` +
+      `Reply JSON: {"selected": [<indices in priority order, best first>]}`,
+    200,
+  ).catch(() => "");
+
+  const parsed = safeJsonParse<{ selected?: unknown }>(raw, {});
+  const sel = parsed.selected;
+  if (
+    Array.isArray(sel) &&
+    sel.every((v) => typeof v === "number") &&
+    sel.length > 0
+  ) {
+    const validIndices = new Set(params.candidates.map((c) => c.index));
+    const filtered = (sel as number[]).filter((i) => validIndices.has(i));
+    if (filtered.length > 0) return filtered.slice(0, params.limit);
+  }
+
+  // Fallback: original order
+  return params.candidates.map((c) => c.index).slice(0, params.limit);
+};

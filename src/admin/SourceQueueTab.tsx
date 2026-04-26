@@ -11,6 +11,11 @@ const TYPE_LABELS: Record<string, string> = {
   user_submitted: "User-submitted",
 };
 
+const FEED_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  news: { label: "News feed", color: "#6b7280" },
+  blog: { label: "Blog feed", color: "#7c3aed" },
+};
+
 const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   pending: { bg: "#fffbeb", border: "#fde68a", text: "#d97706" },
   flagged: { bg: "#fff5f5", border: "#fecaca", text: "#dc2626" },
@@ -79,6 +84,18 @@ const SourceRow = ({
             >
               {TYPE_LABELS[source.type] ?? source.type}
             </span>
+            {/* Feed type badge */}
+            {(() => {
+              const ft = FEED_TYPE_LABELS[source.feed_type] ?? FEED_TYPE_LABELS.news;
+              return (
+                <span
+                  className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[1px]"
+                  style={{ borderColor: ft.color, color: ft.color }}
+                >
+                  {ft.label}
+                </span>
+              );
+            })()}
             {/* Status badge */}
             <span
               className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[1px]"

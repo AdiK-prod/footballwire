@@ -64,7 +64,7 @@ var getServiceRoleClient = () => {
 var listAdminSources = async (params) => {
   const supabase = getServiceRoleClient();
   let query = supabase.from("sources").select(
-    "id, team_id, url, name, type, status, relevance_score, validation_notes, paywall_rate, submitted_by, created_at, teams(city, name, primary_color)"
+    "id, team_id, url, name, type, feed_type, status, relevance_score, validation_notes, paywall_rate, submitted_by, created_at, teams(city, name, primary_color)"
   ).order("created_at", { ascending: false }).limit(50);
   if (params?.status) {
     query = query.eq("status", params.status);
@@ -88,6 +88,7 @@ var listAdminSources = async (params) => {
       url: row.url,
       name: row.name,
       type: row.type,
+      feed_type: row.feed_type ?? "news",
       status: row.status,
       relevance_score: row.relevance_score,
       validation_notes: row.validation_notes,

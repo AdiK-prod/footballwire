@@ -72,6 +72,7 @@ describe("validateSourceWithDeps", () => {
         type: "team_specific",
         status: "pending",
         relevance_score: null,
+        feed_type: "news",
       }) as const,
     updateSourceStatus: async (_params: {
       id: number;

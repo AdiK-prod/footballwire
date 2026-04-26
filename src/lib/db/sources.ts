@@ -11,6 +11,7 @@ export type SourceRecord = {
   type: SourceType;
   status: SourceStatus;
   relevance_score: number | null;
+  feed_type: "news" | "blog";
 };
 
 export const createPendingSource = async (params: {
@@ -32,7 +33,7 @@ export const createPendingSource = async (params: {
       name: new URL(params.url).hostname,
       submitted_by: params.submittedBy,
     })
-    .select("id, team_id, url, name, type, status, relevance_score")
+    .select("id, team_id, url, name, type, status, relevance_score, feed_type")
     .single<SourceRecord>();
 
   if (error) {

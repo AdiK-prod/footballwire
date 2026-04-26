@@ -92,7 +92,7 @@ var getActiveSubscriberTeamIds = async () => {
 };
 var listApprovedSourcesForTeam = async (teamId) => {
   const supabase = getServiceRoleClient();
-  const { data, error } = await supabase.from("sources").select("id, team_id, url, name, type").eq("status", "approved").or(`team_id.is.null,team_id.eq.${teamId}`);
+  const { data, error } = await supabase.from("sources").select("id, team_id, url, name, type, feed_type").eq("status", "approved").or(`team_id.is.null,team_id.eq.${teamId}`);
   if (error) {
     throw new Error(`Sources query failed: ${error.message}`);
   }
@@ -339,6 +339,33 @@ Reply JSON: {"contradicts": boolean}`,
   const parsed = safeJsonParse(text, {});
   return Boolean(parsed.contradicts);
 };
+var selectAndRankArticles = async (params) => {
+  if (params.candidates.length <= params.limit) {
+    return params.candidates.map((c) => c.index);
+  }
+  const list = params.candidates.map(
+    (c) => `[${c.index}] "${c.title}" | category: ${c.category} | score: ${c.compositeScore} | words: ${c.wordCount ?? "?"} | source: ${c.sourceType}`
+  ).join("\n");
+  const raw = await postClaude(
+    "You are an NFL newsletter editor. Select the most valuable stories for a daily briefing. JSON only.",
+    `Pick the best ${params.limit} articles for a ${params.teamDisplayName} daily newsletter.
+Prefer: breaking news, transactions, injuries, and high-quality analysis. Avoid redundancy.
+
+Candidates:
+${list}
+
+Reply JSON: {"selected": [<indices in priority order, best first>]}`,
+    200
+  ).catch(() => "");
+  const parsed = safeJsonParse(raw, {});
+  const sel = parsed.selected;
+  if (Array.isArray(sel) && sel.every((v) => typeof v === "number") && sel.length > 0) {
+    const validIndices = new Set(params.candidates.map((c) => c.index));
+    const filtered = sel.filter((i) => validIndices.has(i));
+    if (filtered.length > 0) return filtered.slice(0, params.limit);
+  }
+  return params.candidates.map((c) => c.index).slice(0, params.limit);
+};
 
 // src/lib/pipeline/articleCategory.ts
 var COMPOSITE_BY_CATEGORY = {
@@ -480,17 +507,51 @@ var fetchArticleHtml = async (url, timeoutMs = 15e3) => {
 
 // src/lib/pipeline/fetchRssItems.ts
 import Parser from "rss-parser";
-var parser = new Parser();
+var parser = new Parser({
+  customFields: {
+    item: [
+      ["content:encoded", "contentEncoded"],
+      ["dc:creator", "author"]
+    ]
+  }
+});
 var fetchLatestRssItems = async (feedUrl, limit) => {
   const parsed = await parser.parseURL(feedUrl);
-  const items = (parsed.items ?? []).filter((item) => item.title && item.link && item.pubDate).map((item) => ({
-    title: item.title,
-    link: item.link,
-    pubDate: item.pubDate,
-    description: item.contentSnippet ?? item.description ?? ""
-  }));
+  const items = (parsed.items ?? []).filter((item) => item.title && item.link && item.pubDate).map((item) => {
+    const raw = item;
+    const base = {
+      title: item.title,
+      link: item.link,
+      pubDate: item.pubDate,
+      description: typeof raw.contentSnippet === "string" ? raw.contentSnippet : typeof raw.description === "string" ? raw.description : ""
+    };
+    const ce = raw.contentEncoded;
+    if (typeof ce === "string" && ce.length > 0) {
+      base.contentEncoded = ce;
+    }
+    return base;
+  });
   items.sort((a, b) => Date.parse(b.pubDate) - Date.parse(a.pubDate));
   return items.slice(0, limit);
+};
+var decodeHtmlEntities = (text) => text.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&#8217;/g, "'").replace(/&#8216;/g, "'").replace(/&#8220;/g, "\u201C").replace(/&#8221;/g, "\u201D").replace(/&#8230;/g, "\u2026").replace(/&nbsp;/g, " ").replace(
+  /&#(\d+);/g,
+  (_, code) => String.fromCharCode(parseInt(code, 10))
+);
+var cleanBlogContent = (html) => {
+  const stripped = html.replace(/<[^>]+>/g, " ");
+  const decoded = decodeHtmlEntities(stripped);
+  return decoded.replace(/\s+/g, " ").trim();
+};
+var THREAD_TITLE_PATTERNS = /\b(live thread|open thread|game thread|chat)\b/i;
+var VIDEO_EMBED_PATTERNS = /(?:youtube\.com|youtu\.be|vimeo\.com|iframe[^>]+src)/i;
+var classifyBlogItem = (params) => {
+  if (THREAD_TITLE_PATTERNS.test(params.title)) return "thread";
+  if (VIDEO_EMBED_PATTERNS.test(params.contentEncoded) && params.wordCount < 100) {
+    return "video";
+  }
+  if (params.wordCount < 200) return "short";
+  return "article";
 };
 
 // src/lib/pipeline/persistTeamRun.ts
@@ -934,28 +995,46 @@ var runTeamPipeline = async (teamId) => {
           articlesFetched -= 1;
           continue;
         }
-        const bodyRes = await fetchArticleHtml(item.link);
-        if (!bodyRes.ok) {
-          attempts.push({
-            source,
+        let rawText = null;
+        let wc = 0;
+        if (source.feed_type === "blog") {
+          const ce = item.contentEncoded ?? "";
+          const blogType = classifyBlogItem({
             title: item.title,
-            link: item.link,
-            publishedAt: new Date(item.pubDate).toISOString(),
-            rawText: null,
-            wordCount: null,
-            passedQuality: false,
-            relevantToTeam: false,
-            relevanceReasoning: null,
-            category: "general",
-            compositeScore: getCompositeForCategory("general"),
-            passedThreshold: false,
-            thresholdUsed: getScoreThreshold(false),
-            rejectionReason: "quality_gate (unreachable)"
+            contentEncoded: ce,
+            wordCount: countWords(cleanBlogContent(ce))
           });
-          continue;
+          if (blogType === "video") {
+            articlesFetched -= 1;
+            pipelineInfo("blog_video_skipped", { teamId, sourceId: source.id, url: item.link });
+            continue;
+          }
+          rawText = cleanBlogContent(ce);
+          wc = countWords(rawText);
+        } else {
+          const bodyRes = await fetchArticleHtml(item.link);
+          if (!bodyRes.ok) {
+            attempts.push({
+              source,
+              title: item.title,
+              link: item.link,
+              publishedAt: new Date(item.pubDate).toISOString(),
+              rawText: null,
+              wordCount: null,
+              passedQuality: false,
+              relevantToTeam: false,
+              relevanceReasoning: null,
+              category: "general",
+              compositeScore: getCompositeForCategory("general"),
+              passedThreshold: false,
+              thresholdUsed: getScoreThreshold(false),
+              rejectionReason: "quality_gate (unreachable)"
+            });
+            continue;
+          }
+          rawText = stripHtmlToText(bodyRes.html);
+          wc = countWords(rawText);
         }
-        const rawText = stripHtmlToText(bodyRes.html);
-        const wc = countWords(rawText);
         if (wc < 200) {
           attempts.push({
             source,
@@ -982,7 +1061,7 @@ var runTeamPipeline = async (teamId) => {
             title: item.title,
             link: item.link,
             publishedAt: new Date(item.pubDate).toISOString(),
-            rawText,
+            rawText: rawText ?? null,
             wordCount: wc,
             passedQuality: true,
             relevantToTeam: false,
@@ -1002,7 +1081,7 @@ var runTeamPipeline = async (teamId) => {
           const relResult = await checkTeamRelevance({
             teamDisplayName: teamDisplay,
             title: item.title,
-            bodyExcerpt: rawText,
+            bodyExcerpt: rawText ?? "",
             isGeneralSource
           });
           relevantToTeam = relResult.relevant;
@@ -1039,7 +1118,7 @@ var runTeamPipeline = async (teamId) => {
         try {
           category = await classifyArticleCategory({
             title: item.title,
-            bodyExcerpt: rawText
+            bodyExcerpt: rawText ?? ""
           });
         } catch (err) {
           pipelineInfo("category_claude_failed", {
@@ -1047,7 +1126,7 @@ var runTeamPipeline = async (teamId) => {
             sourceId: source.id,
             message: err instanceof Error ? err.message : "unknown"
           });
-          category = categorizeFromTitleAndBody(item.title, rawText);
+          category = categorizeFromTitleAndBody(item.title, rawText ?? "");
         }
         const compositeScore = getCompositeForCategory(category);
         scoredCount += 1;
@@ -1079,7 +1158,30 @@ var runTeamPipeline = async (teamId) => {
     const duplicateUrls = new Set(dropped.map((d) => d.link));
     const thresholdKept = kept.filter((k) => k.passedThreshold);
     const nonInjuryRanked = thresholdKept.filter((k) => k.category !== "injury").map(toRanked);
-    const diversified = enforceSourceDiversityInTopFive(nonInjuryRanked);
+    let diversified;
+    if (nonInjuryRanked.length > 5) {
+      const candidates = nonInjuryRanked.map((a, i) => ({
+        index: i,
+        title: a.title,
+        category: a.category,
+        compositeScore: a.compositeScore,
+        wordCount: a.wordCount,
+        sourceType: a.source.type
+      }));
+      try {
+        const chosen = await selectAndRankArticles({
+          teamDisplayName: teamDisplay,
+          candidates,
+          limit: 5
+        });
+        const claudePicked = chosen.map((i) => nonInjuryRanked[i]).filter(Boolean);
+        diversified = enforceSourceDiversityInTopFive(claudePicked);
+      } catch {
+        diversified = enforceSourceDiversityInTopFive(nonInjuryRanked);
+      }
+    } else {
+      diversified = enforceSourceDiversityInTopFive(nonInjuryRanked);
+    }
     const lead = diversified[0];
     const quick = diversified.slice(1, 5);
     const injuries = kept.filter((k) => k.category === "injury");

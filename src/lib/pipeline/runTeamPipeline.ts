@@ -3,6 +3,7 @@ import {
   checkGenericSummary,
   checkTeamRelevance,
   classifyArticleCategory,
+  selectAndRankArticles,
   summarizeArticleBody,
 } from "../ai/claudePipeline";
 import type { ArticleCategory } from "./articleCategory";
@@ -15,7 +16,11 @@ import {
   fetchArticleHtml,
   stripHtmlToText,
 } from "./fetchArticleBody";
-import { fetchLatestRssItems } from "./fetchRssItems";
+import {
+  classifyBlogItem,
+  cleanBlogContent,
+  fetchLatestRssItems,
+} from "./fetchRssItems";
 import type { ArticleUpsertPayload, ScoreLogPayload } from "./persistTeamRun";
 import { upsertArticlesAndInsertScoreLogs } from "./persistTeamRun";
 import type { ApprovedSourceRow } from "../db/pipelineDb";
@@ -258,29 +263,51 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
           continue;
         }
 
-        const bodyRes = await fetchArticleHtml(item.link);
-        if (!bodyRes.ok) {
-          attempts.push({
-            source,
-            title: item.title,
-            link: item.link,
-            publishedAt: new Date(item.pubDate).toISOString(),
-            rawText: null,
-            wordCount: null,
-            passedQuality: false,
-            relevantToTeam: false,
-            relevanceReasoning: null,
-            category: "general",
-            compositeScore: getCompositeForCategory("general"),
-            passedThreshold: false,
-            thresholdUsed: getScoreThreshold(false),
-            rejectionReason: "quality_gate (unreachable)",
-          });
-          continue;
-        }
+        // ── Body extraction: blog feeds use content:encoded; news feeds scrape ──
+        let rawText: string | null = null;
+        let wc = 0;
 
-        const rawText = stripHtmlToText(bodyRes.html);
-        const wc = countWords(rawText);
+        if (source.feed_type === "blog") {
+          const ce = item.contentEncoded ?? "";
+          const blogType = classifyBlogItem({
+            title: item.title,
+            contentEncoded: ce,
+            wordCount: countWords(cleanBlogContent(ce)),
+          });
+
+          if (blogType === "video") {
+            // Video items have no summarisable text — skip entirely
+            articlesFetched -= 1;
+            pipelineInfo("blog_video_skipped", { teamId, sourceId: source.id, url: item.link });
+            continue;
+          }
+
+          rawText = cleanBlogContent(ce);
+          wc = countWords(rawText);
+        } else {
+          const bodyRes = await fetchArticleHtml(item.link);
+          if (!bodyRes.ok) {
+            attempts.push({
+              source,
+              title: item.title,
+              link: item.link,
+              publishedAt: new Date(item.pubDate).toISOString(),
+              rawText: null,
+              wordCount: null,
+              passedQuality: false,
+              relevantToTeam: false,
+              relevanceReasoning: null,
+              category: "general",
+              compositeScore: getCompositeForCategory("general"),
+              passedThreshold: false,
+              thresholdUsed: getScoreThreshold(false),
+              rejectionReason: "quality_gate (unreachable)",
+            });
+            continue;
+          }
+          rawText = stripHtmlToText(bodyRes.html);
+          wc = countWords(rawText);
+        }
 
         if (wc < 200) {
           attempts.push({
@@ -311,7 +338,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
             title: item.title,
             link: item.link,
             publishedAt: new Date(item.pubDate).toISOString(),
-            rawText,
+            rawText: rawText ?? null,
             wordCount: wc,
             passedQuality: true,
             relevantToTeam: false,
@@ -333,7 +360,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
           const relResult = await checkTeamRelevance({
             teamDisplayName: teamDisplay,
             title: item.title,
-            bodyExcerpt: rawText,
+            bodyExcerpt: rawText ?? "",
             isGeneralSource,
           });
           relevantToTeam = relResult.relevant;
@@ -374,7 +401,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
         try {
           category = await classifyArticleCategory({
             title: item.title,
-            bodyExcerpt: rawText,
+            bodyExcerpt: rawText ?? "",
           });
         } catch (err) {
           pipelineInfo("category_claude_failed", {
@@ -382,7 +409,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
             sourceId: source.id,
             message: err instanceof Error ? err.message : "unknown",
           });
-          category = categorizeFromTitleAndBody(item.title, rawText);
+          category = categorizeFromTitleAndBody(item.title, rawText ?? "");
         }
 
         const compositeScore = getCompositeForCategory(category);
@@ -425,7 +452,32 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
       .filter((k) => k.category !== "injury")
       .map(toRanked);
 
-    const diversified = enforceSourceDiversityInTopFive(nonInjuryRanked);
+    // ── Claude prioritization: when > 5 non-injury candidates compete, ask
+    //    Claude to pick the best 5 rather than blindly taking the top scores ──
+    let diversified: typeof nonInjuryRanked;
+    if (nonInjuryRanked.length > 5) {
+      const candidates = nonInjuryRanked.map((a, i) => ({
+        index: i,
+        title: a.title,
+        category: a.category,
+        compositeScore: a.compositeScore,
+        wordCount: a.wordCount,
+        sourceType: a.source.type,
+      }));
+      try {
+        const chosen = await selectAndRankArticles({
+          teamDisplayName: teamDisplay,
+          candidates,
+          limit: 5,
+        });
+        const claudePicked = chosen.map((i) => nonInjuryRanked[i]).filter(Boolean);
+        diversified = enforceSourceDiversityInTopFive(claudePicked);
+      } catch {
+        diversified = enforceSourceDiversityInTopFive(nonInjuryRanked);
+      }
+    } else {
+      diversified = enforceSourceDiversityInTopFive(nonInjuryRanked);
+    }
 
     const lead = diversified[0];
     const quick = diversified.slice(1, 5);

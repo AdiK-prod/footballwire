@@ -5,17 +5,23 @@ type CreateSubscriberParams = {
   teamId: number;
 };
 
+/**
+ * Subscribe an email to a team.
+ * One email can follow multiple teams — uniqueness is enforced on (email, team_id).
+ * If the subscription already exists but is inactive, it is reactivated.
+ */
 export const createSubscriber = async ({
   email,
   teamId,
 }: CreateSubscriberParams): Promise<void> => {
   try {
     assertSupabaseClientConfig();
-    const { error } = await supabase.from("subscribers").insert({
-      email,
-      team_id: teamId,
-      is_active: true,
-    });
+    const { error } = await supabase
+      .from("subscribers")
+      .upsert(
+        { email, team_id: teamId, is_active: true },
+        { onConflict: "email,team_id", ignoreDuplicates: false },
+      );
 
     if (error) {
       throw new Error(error.message);
