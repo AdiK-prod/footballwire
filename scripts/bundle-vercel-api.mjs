@@ -54,6 +54,10 @@ const bundles = [
     entry: join(root, "server/vercel/admin/send-now.ts"),
     outfile: join(root, "api/admin/send-now.js"),
   },
+  {
+    entry: join(root, "server/vercel/admin/revalidate-source.ts"),
+    outfile: join(root, "api/admin/revalidate-source.js"),
+  },
 ];
 
 for (const { entry, outfile } of bundles) {
