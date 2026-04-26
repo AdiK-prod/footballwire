@@ -43,7 +43,14 @@ export const listApprovedSourcesForTeam = async (
     throw new Error(`Sources query failed: ${error.message}`);
   }
 
-  return (data ?? []) as ApprovedSourceRow[];
+  const rows = (data ?? []) as ApprovedSourceRow[];
+  // Team-specific sources first — ensures team content is processed even if a
+  // general source article causes an error mid-run.
+  return rows.sort((a, b) => {
+    const aIsTeam = a.team_id !== null ? 0 : 1;
+    const bIsTeam = b.team_id !== null ? 0 : 1;
+    return aIsTeam - bIsTeam;
+  });
 };
 
 export const getTeamById = async (teamId: number): Promise<Team> => {
