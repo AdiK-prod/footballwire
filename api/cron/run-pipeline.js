@@ -96,7 +96,12 @@ var listApprovedSourcesForTeam = async (teamId) => {
   if (error) {
     throw new Error(`Sources query failed: ${error.message}`);
   }
-  return data ?? [];
+  const rows = data ?? [];
+  return rows.sort((a, b) => {
+    const aIsTeam = a.team_id !== null ? 0 : 1;
+    const bIsTeam = b.team_id !== null ? 0 : 1;
+    return aIsTeam - bIsTeam;
+  });
 };
 var getTeamById = async (teamId) => {
   const supabase = getServiceRoleClient();
@@ -189,6 +194,14 @@ var VALID_CATEGORIES = [
 ];
 var isArticleCategory = (value) => VALID_CATEGORIES.includes(value);
 var stripJsonFences = (value) => value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+var sanitizeForPrompt = (text) => text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, " ").replace(/\\/g, "\\\\").slice(0, 8e3);
+var safeJsonParse = (text, fallback) => {
+  try {
+    return JSON.parse(stripJsonFences(text));
+  } catch {
+    return fallback;
+  }
+};
 var postClaude = async (system, user, maxTokens) => {
   if (!config.anthropicApiKey) {
     throw new Error("Missing ANTHROPIC_API_KEY");
@@ -254,12 +267,12 @@ general: everything else
 Title: ${params.title}
 
 Body excerpt:
-${params.bodyExcerpt.slice(0, 8e3)}
+${sanitizeForPrompt(params.bodyExcerpt)}
 
 Reply JSON: {"category":"transaction"|"injury"|"game_analysis"|"rumor"|"general"}`,
     200
   );
-  const parsed = JSON.parse(stripJsonFences(text));
+  const parsed = safeJsonParse(text, {});
   const raw = parsed.category?.trim().toLowerCase() ?? "";
   if (isArticleCategory(raw)) {
     return raw;
@@ -274,7 +287,7 @@ A: ${headlineA}
 B: ${headlineB}`,
     100
   );
-  const parsed = JSON.parse(stripJsonFences(text));
+  const parsed = safeJsonParse(text, {});
   return Boolean(parsed.same_story);
 };
 var summarizeArticleBody = async (params) => {
@@ -283,12 +296,12 @@ var summarizeArticleBody = async (params) => {
     `Summarize for fans of ${params.teamDisplayName}. Title: ${params.title}
 
 Body excerpt:
-${params.bodyExcerpt.slice(0, 12e3)}
+${sanitizeForPrompt(params.bodyExcerpt)}
 
 Reply JSON: {"summary": string}`,
     500
   );
-  const parsed = JSON.parse(stripJsonFences(text));
+  const parsed = safeJsonParse(text, {});
   const summary = parsed.summary?.trim() ?? "";
   if (!summary) {
     throw new Error("Empty summary from Claude");
@@ -304,7 +317,7 @@ ${summary}
 Reply JSON: {"generic": boolean}`,
     100
   );
-  const parsed = JSON.parse(stripJsonFences(text));
+  const parsed = safeJsonParse(text, {});
   return Boolean(parsed.generic);
 };
 var checkContradiction = async (headline, summary) => {
@@ -316,7 +329,7 @@ Summary: ${summary}
 Reply JSON: {"contradicts": boolean}`,
     100
   );
-  const parsed = JSON.parse(stripJsonFences(text));
+  const parsed = safeJsonParse(text, {});
   return Boolean(parsed.contradicts);
 };
 

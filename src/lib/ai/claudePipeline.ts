@@ -17,6 +17,19 @@ const isArticleCategory = (value: string): value is ArticleCategory =>
 const stripJsonFences = (value: string) =>
   value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
+/** Remove chars that commonly break JSON inside Claude string values. */
+const sanitizeForPrompt = (text: string): string =>
+  text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, " ").replace(/\\/g, "\\\\").slice(0, 8000);
+
+/** JSON.parse with a fallback — never lets a bad Claude response crash the pipeline. */
+const safeJsonParse = <T>(text: string, fallback: T): T => {
+  try {
+    return JSON.parse(stripJsonFences(text)) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 const postClaude = async (system: string, user: string, maxTokens: number) => {
   if (!config.anthropicApiKey) {
     throw new Error("Missing ANTHROPIC_API_KEY");
@@ -104,11 +117,11 @@ export const classifyArticleCategory = async (params: {
       `game_analysis: recaps, film, grades, snap counts, breakdowns\n` +
       `rumor: rumors, unnamed sources, speculation\n` +
       `general: everything else\n\n` +
-      `Title: ${params.title}\n\nBody excerpt:\n${params.bodyExcerpt.slice(0, 8000)}\n\n` +
+      `Title: ${params.title}\n\nBody excerpt:\n${sanitizeForPrompt(params.bodyExcerpt)}\n\n` +
       `Reply JSON: {"category":"transaction"|"injury"|"game_analysis"|"rumor"|"general"}`,
     200,
   );
-  const parsed = JSON.parse(stripJsonFences(text)) as { category?: string };
+  const parsed = safeJsonParse<{ category?: string }>(text, {});
   const raw = parsed.category?.trim().toLowerCase() ?? "";
   if (isArticleCategory(raw)) {
     return raw;
@@ -123,7 +136,7 @@ export const confirmSameStory = async (headlineA: string, headlineB: string) => 
     `Do these two headlines refer to the same underlying news story?\nA: ${headlineA}\nB: ${headlineB}`,
     100,
   );
-  const parsed = JSON.parse(stripJsonFences(text)) as { same_story?: boolean };
+  const parsed = safeJsonParse<{ same_story?: boolean }>(text, {});
   return Boolean(parsed.same_story);
 };
 
@@ -134,10 +147,10 @@ export const summarizeArticleBody = async (params: {
 }) => {
   const text = await postClaude(
     "You write short factual newsletter summaries for NFL fans. Max 3 sentences. JSON only.",
-    `Summarize for fans of ${params.teamDisplayName}. Title: ${params.title}\n\nBody excerpt:\n${params.bodyExcerpt.slice(0, 12_000)}\n\nReply JSON: {\"summary\": string}`,
+    `Summarize for fans of ${params.teamDisplayName}. Title: ${params.title}\n\nBody excerpt:\n${sanitizeForPrompt(params.bodyExcerpt)}\n\nReply JSON: {\"summary\": string}`,
     500,
   );
-  const parsed = JSON.parse(stripJsonFences(text)) as { summary?: string };
+  const parsed = safeJsonParse<{ summary?: string }>(text, {});
   const summary = parsed.summary?.trim() ?? "";
   if (!summary) {
     throw new Error("Empty summary from Claude");
@@ -151,7 +164,7 @@ export const checkGenericSummary = async (summary: string) => {
     `Is this summary mostly generic filler (e.g. "great game", "exciting news") without concrete facts?\n${summary}\n\nReply JSON: {\"generic\": boolean}`,
     100,
   );
-  const parsed = JSON.parse(stripJsonFences(text)) as { generic?: boolean };
+  const parsed = safeJsonParse<{ generic?: boolean }>(text, {});
   return Boolean(parsed.generic);
 };
 
@@ -161,6 +174,6 @@ export const checkContradiction = async (headline: string, summary: string) => {
     `Headline: ${headline}\nSummary: ${summary}\n\nReply JSON: {\"contradicts\": boolean}`,
     100,
   );
-  const parsed = JSON.parse(stripJsonFences(text)) as { contradicts?: boolean };
+  const parsed = safeJsonParse<{ contradicts?: boolean }>(text, {});
   return Boolean(parsed.contradicts);
 };
