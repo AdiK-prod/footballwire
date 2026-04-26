@@ -56,9 +56,18 @@ const postClaude = async (system: string, user: string, maxTokens: number) => {
     throw new Error(`Claude API failed: ${detail}`);
   }
 
-  const payload = (await response.json()) as {
-    content?: Array<{ type: string; text?: string }>;
-  };
+  // response.json() can throw if the HTTP body contains unescaped control
+  // characters in Claude's text value (e.g. raw \u0000-\u001f bytes).
+  // Fall back to raw text parse as a second-chance attempt.
+  let payload: { content?: Array<{ type: string; text?: string }> };
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    const raw = await response.text().catch(() => "");
+    // Extract the text value with a regex rather than JSON.parse
+    const match = raw.match(/"text"\s*:\s*"([\s\S]*?)"\s*[},]/);
+    return match ? match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : "";
+  }
   return payload.content?.find((item) => item.type === "text")?.text ?? "";
 };
 
