@@ -164,7 +164,7 @@ export const validateSourceWithDeps = async (
     await deps.updateSourceStatus({
       id: source.id,
       status,
-      relevanceScore: relevance.confidence,
+      relevanceScore: Math.round(relevance.confidence),
       validationNotes:
         status === "approved"
           ? `Approved with confidence ${relevance.confidence}.`

@@ -13845,8 +13845,8 @@ var checkTeamSourceRelevance = async (params) => {
 Source URL: ${params.sourceUrl}
 Source title: ${params.sourceTitle}
 
-Reply JSON only:
-{"relevant": boolean, "confidence": number}`;
+Reply JSON only. confidence must be an integer 0-100:
+{"relevant": boolean, "confidence": integer_0_to_100}`;
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -13877,7 +13877,8 @@ Reply JSON only:
   if (typeof parsed.relevant !== "boolean" || typeof parsed.confidence !== "number") {
     throw new Error("Invalid Claude relevance JSON");
   }
-  return parsed;
+  const confidence = parsed.confidence > 0 && parsed.confidence <= 1 ? Math.round(parsed.confidence * 100) : Math.round(parsed.confidence);
+  return { relevant: parsed.relevant, confidence };
 };
 
 // src/lib/supabase/server.ts
@@ -14062,7 +14063,7 @@ var validateSourceWithDeps = async (input, deps) => {
     await deps.updateSourceStatus({
       id: source.id,
       status,
-      relevanceScore: relevance.confidence,
+      relevanceScore: Math.round(relevance.confidence),
       validationNotes: status === "approved" ? `Approved with confidence ${relevance.confidence}.` : `Flagged due to low confidence (${relevance.confidence}).`
     });
     if (status === "flagged") {

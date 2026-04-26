@@ -22,8 +22,8 @@ export const checkTeamSourceRelevance = async (params: {
 Source URL: ${params.sourceUrl}
 Source title: ${params.sourceTitle}
 
-Reply JSON only:
-{"relevant": boolean, "confidence": number}`;
+Reply JSON only. confidence must be an integer 0-100:
+{"relevant": boolean, "confidence": integer_0_to_100}`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -62,5 +62,11 @@ Reply JSON only:
     throw new Error("Invalid Claude relevance JSON");
   }
 
-  return parsed;
+  // Normalize 0-1 float to 0-100 integer if Claude ignores the scale instruction
+  const confidence =
+    parsed.confidence > 0 && parsed.confidence <= 1
+      ? Math.round(parsed.confidence * 100)
+      : Math.round(parsed.confidence);
+
+  return { relevant: parsed.relevant, confidence };
 };
