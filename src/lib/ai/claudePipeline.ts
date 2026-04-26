@@ -88,8 +88,11 @@ export const checkTeamRelevance = async (params: {
   try {
     raw = await postClaude(
       "You assess NFL article team relevance. Reply JSON only.",
-      `Is the ${params.teamDisplayName} a PRIMARY subject of this article?\n` +
-        `PRIMARY means: the article is substantially about this team, their players, coaches, or front office decisions. A passing mention does not count.\n\n` +
+      `Does this article contain meaningful, extractable content about the ${params.teamDisplayName}?\n\n` +
+        `Answer YES (relevant: true) in either of these cases:\n` +
+        `1. PRIMARY: The article is substantially about this team, their players, coaches, or front office decisions.\n` +
+        `2. ENSEMBLE: The article covers all 32 NFL teams (e.g. draft grades, power rankings, trade deadline roundups, season previews) — these always contain a dedicated section for every team including ${params.teamDisplayName}.\n\n` +
+        `Answer NO (relevant: false) only if the team is not mentioned at all, or gets only a passing single-sentence reference with no real content.\n\n` +
         `Article title: ${params.title}\n` +
         `Article body excerpt: ${params.bodyExcerpt.slice(0, 1000)}\n\n` +
         `Reply JSON only: { "relevant": boolean, "confidence": 0-100, "reasoning": "one sentence" }`,
@@ -156,7 +159,10 @@ export const summarizeArticleBody = async (params: {
 }) => {
   const text = await postClaude(
     "You write short factual newsletter summaries for NFL fans. Max 3 sentences. JSON only.",
-    `Summarize for fans of ${params.teamDisplayName}. Title: ${params.title}\n\nBody excerpt:\n${sanitizeForPrompt(params.bodyExcerpt)}\n\nReply JSON: {\"summary\": string}`,
+    `Summarize for fans of ${params.teamDisplayName}. Title: ${params.title}\n\n` +
+      `If this is a league-wide roundup (e.g. draft grades for all 32 teams, power rankings), ` +
+      `extract and summarize ONLY the ${params.teamDisplayName} section — ignore all other teams.\n\n` +
+      `Body excerpt:\n${sanitizeForPrompt(params.bodyExcerpt)}\n\nReply JSON: {\"summary\": string}`,
     500,
   );
   const parsed = safeJsonParse<{ summary?: string }>(text, {});
