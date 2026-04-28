@@ -13904,7 +13904,8 @@ var createPendingSource = async (params) => {
     status: "pending",
     paywall_rate: 0,
     name: new URL(params.url).hostname,
-    submitted_by: params.submittedBy
+    submitted_by: params.submittedBy,
+    feed_type: params.feedType ?? "news"
   }).select("id, team_id, url, name, type, status, relevance_score, feed_type").single();
   if (error48) {
     throw new Error(`Failed to create source: ${error48.message}`);
@@ -13972,7 +13973,8 @@ var validateSourceInputSchema = external_exports.object({
   url: external_exports.string().url(),
   teamId: external_exports.number().int().positive().nullable(),
   sourceType: external_exports.enum(["general", "team_specific", "user_submitted"]),
-  submittedBy: external_exports.string().min(1).default("system")
+  submittedBy: external_exports.string().min(1).default("system"),
+  feedType: external_exports.enum(["news", "blog"]).default("news")
 }).superRefine((value, ctx) => {
   if (value.sourceType !== "general" && value.teamId === null) {
     ctx.addIssue({
@@ -14024,7 +14026,8 @@ var validateSourceWithDeps = async (input, deps) => {
     url: input.url,
     teamId: input.teamId,
     type: input.sourceType,
-    submittedBy: input.submittedBy
+    submittedBy: input.submittedBy,
+    feedType: input.feedType
   });
   let sample;
   try {

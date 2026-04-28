@@ -1,5 +1,6 @@
 import { getServiceRoleClient } from "../supabase/server";
 import type { Team } from "../types";
+import { sanitizeForDb } from "../utils/sanitizeString";
 
 export const getActiveSubscriberTeamIds = async (): Promise<number[]> => {
   const supabase = getServiceRoleClient();
@@ -139,7 +140,7 @@ export const finalizePipelineRun = async (params: {
       articles_passed_quality_gate: params.passedQuality,
       articles_scored: params.articlesScored,
       articles_selected: params.articlesSelected,
-      notes: params.notes ?? null,
+      notes: params.notes ? sanitizeForDb(params.notes) : null,
     })
     .eq("id", params.runId);
 

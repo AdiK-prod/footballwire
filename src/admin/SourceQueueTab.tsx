@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AdminSourceRow } from "@/lib/db/adminDb";
+import { getBrowserClient } from "@/lib/supabase/browser";
 
 type Props = { accessToken: string };
 type FilterStatus = "pending" | "flagged" | "approved" | "rejected" | "";
@@ -173,12 +174,244 @@ const SourceRow = ({
   );
 };
 
+type TeamOption = { id: number; city: string; name: string };
+
+type AddSourceState = {
+  url: string;
+  scope: "team_specific" | "general";
+  feedType: "news" | "blog";
+  teamId: string;
+};
+
+type AddSourceResult = {
+  ok: boolean;
+  message: string;
+};
+
+const AddSourceForm = ({
+  accessToken,
+  teams,
+  onAdded,
+  onCancel,
+}: {
+  accessToken: string;
+  teams: TeamOption[];
+  onAdded: () => void;
+  onCancel: () => void;
+}) => {
+  const [form, setForm] = useState<AddSourceState>({
+    url: "",
+    scope: "team_specific",
+    feedType: "news",
+    teamId: teams[0] ? String(teams[0].id) : "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<AddSourceResult | null>(null);
+
+  const handleSubmit = async () => {
+    if (!form.url.trim()) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const payload: Record<string, unknown> = {
+        url: form.url.trim(),
+        sourceType: form.scope,
+        feedType: form.feedType,
+        submittedBy: "admin",
+      };
+      if (form.scope === "team_specific") {
+        const tid = Number(form.teamId);
+        if (!tid) {
+          setResult({ ok: false, message: "Please select a team." });
+          setSubmitting(false);
+          return;
+        }
+        payload.teamId = tid;
+      } else {
+        payload.teamId = null;
+      }
+
+      const res = await fetch("/api/validate-source", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const json = (await res.json()) as {
+        ok: boolean;
+        data?: { status: string; reason: string; confidence: number | null };
+        error?: string;
+      };
+
+      if (!json.ok || !json.data) {
+        setResult({ ok: false, message: json.error ?? "Validation failed" });
+      } else {
+        const d = json.data;
+        const conf = d.confidence !== null ? ` · Relevance: ${d.confidence}%` : "";
+        setResult({
+          ok: d.status !== "rejected",
+          message: `${d.status === "approved" ? "✓ Approved" : d.status === "flagged" ? "⚠ Flagged" : "✗ Rejected"} — ${d.reason}${conf}`,
+        });
+        if (d.status !== "rejected") {
+          onAdded();
+        }
+      }
+    } catch (err) {
+      setResult({ ok: false, message: err instanceof Error ? err.message : "Request failed" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-fw-border bg-fw-card p-5 space-y-4">
+      <p className="text-[13px] font-semibold text-fw-ink">Add Source</p>
+
+      <div className="space-y-3">
+        {/* RSS URL */}
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[1.5px] text-fw-ink-faint">
+            RSS Feed URL
+          </label>
+          <input
+            type="url"
+            value={form.url}
+            onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+            placeholder="https://example.com/feed"
+            className="w-full rounded-lg border border-fw-border bg-fw-input-bg px-3 py-2 text-[13px] text-fw-ink placeholder:text-fw-ink-faint focus:outline-none focus:border-fw-border-mid"
+          />
+        </div>
+
+        {/* Scope + Feed type row */}
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[1.5px] text-fw-ink-faint">
+              Scope
+            </label>
+            <div className="flex gap-3">
+              {(["team_specific", "general"] as const).map((s) => (
+                <label key={s} className="flex items-center gap-1.5 cursor-pointer text-[13px] text-fw-ink">
+                  <input
+                    type="radio"
+                    name="scope"
+                    value={s}
+                    checked={form.scope === s}
+                    onChange={() => setForm((f) => ({ ...f, scope: s }))}
+                  />
+                  {s === "team_specific" ? "Team-specific" : "General (all teams)"}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[1.5px] text-fw-ink-faint">
+              Feed Type
+            </label>
+            <div className="flex gap-3">
+              {(["news", "blog"] as const).map((ft) => (
+                <label key={ft} className="flex items-center gap-1.5 cursor-pointer text-[13px] text-fw-ink">
+                  <input
+                    type="radio"
+                    name="feedType"
+                    value={ft}
+                    checked={form.feedType === ft}
+                    onChange={() => setForm((f) => ({ ...f, feedType: ft }))}
+                  />
+                  {ft === "news" ? "News" : "Blog"}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Team dropdown — only when team-specific */}
+        {form.scope === "team_specific" && (
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[1.5px] text-fw-ink-faint">
+              Team
+            </label>
+            <select
+              value={form.teamId}
+              onChange={(e) => setForm((f) => ({ ...f, teamId: e.target.value }))}
+              className="rounded-lg border border-fw-border bg-fw-input-bg px-3 py-2 text-[13px] text-fw-ink focus:outline-none focus:border-fw-border-mid"
+            >
+              <option value="">Select team…</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.city} {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Result */}
+      {result && (
+        <p
+          className="text-[13px]"
+          style={{ color: result.ok ? "#16a34a" : "#dc2626" }}
+        >
+          {result.message}
+        </p>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={submitting || !form.url.trim()}
+          onClick={() => void handleSubmit()}
+          className="rounded-lg bg-[#111111] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#333333] transition-colors disabled:opacity-50"
+        >
+          {submitting ? "Validating…" : "Validate & Add"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-fw-border px-4 py-2 text-[13px] text-fw-ink-muted hover:border-fw-border-mid hover:text-fw-ink transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const SourceQueueTab = ({ accessToken }: Props) => {
   const [sources, setSources] = useState<AdminSourceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("");
   const [filterType, setFilterType] = useState<FilterType>("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        const supabase = getBrowserClient();
+        const { data } = await supabase
+          .from("teams")
+          .select("id, city, name")
+          .order("city")
+          .returns<{ id: number; city: string; name: string }[]>();
+        setTeams(
+          (data ?? []).map((t) => ({
+            id: t.id,
+            city: t.city,
+            name: t.name,
+          })),
+        );
+      } catch {
+        // non-critical — form still works without team list
+      }
+    };
+    void loadTeams();
+  }, []);
 
   const fetchSources = async () => {
     setLoading(true);
@@ -230,10 +463,31 @@ export const SourceQueueTab = ({ accessToken }: Props) => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-[22px] font-bold text-fw-ink">Source Queue</h2>
-        <p className="text-[13px] text-fw-ink-muted">Pending and flagged sources awaiting review.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[22px] font-bold text-fw-ink">Source Queue</h2>
+          <p className="text-[13px] text-fw-ink-muted">Pending and flagged sources awaiting review.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className="flex-shrink-0 rounded-lg border border-fw-border px-4 py-2 text-[13px] font-medium text-fw-ink hover:border-fw-border-mid hover:bg-fw-card transition-colors"
+        >
+          {showAddForm ? "Close ▲" : "Add source ▾"}
+        </button>
       </div>
+
+      {/* Add Source inline form */}
+      {showAddForm && (
+        <AddSourceForm
+          accessToken={accessToken}
+          teams={teams}
+          onAdded={() => {
+            void fetchSources();
+          }}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

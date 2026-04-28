@@ -1,4 +1,5 @@
 import Parser from "rss-parser";
+import he from "he";
 
 const parser = new Parser({
   customFields: {
@@ -53,29 +54,10 @@ export const fetchLatestRssItems = async (
 
 // ─── Blog feed helpers ────────────────────────────────────────────────────────
 
-/** Decode the most common HTML entities (no external dep). */
-const decodeHtmlEntities = (text: string): string =>
-  text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&#8217;/g, "'")
-    .replace(/&#8216;/g, "'")
-    .replace(/&#8220;/g, "\u201c")
-    .replace(/&#8221;/g, "\u201d")
-    .replace(/&#8230;/g, "…")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&#(\d+);/g, (_, code: string) =>
-      String.fromCharCode(parseInt(code, 10)),
-    );
-
-/** Strip HTML tags, decode entities, collapse whitespace. */
+/** Strip HTML tags, decode all entities with he, collapse whitespace. */
 export const cleanBlogContent = (html: string): string => {
   const stripped = html.replace(/<[^>]+>/g, " ");
-  const decoded = decodeHtmlEntities(stripped);
-  return decoded.replace(/\s+/g, " ").trim();
+  return he.decode(stripped).replace(/\s+/g, " ").trim();
 };
 
 const THREAD_TITLE_PATTERNS = /\b(live thread|open thread|game thread|chat)\b/i;

@@ -10,6 +10,7 @@ type SelectedArticle = {
   source_name: string;
   category: ArticleCategory | null;
   published_at: string;
+  youtube_url?: string | null;
 };
 
 const esc = (value: string): string =>
@@ -123,6 +124,18 @@ const buildStatBlock = (
 ${sourceName ? `<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:#888888;line-height:1.4;">Source: ${esc(sourceName)}</p>` : ""}
 </td></tr></table>`;
 
+/** Video Quick Hit block — title + watch link only, no summary (blog sources) */
+const buildVideoHit = (a: SelectedArticle, teamColor: string, isLast: boolean): string => {
+  const watchUrl = a.youtube_url ?? a.original_url;
+  const borderBottom = isLast ? "" : "border-bottom:1px solid #eeeeee;";
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+<td width="3" style="background:${teamColor};width:3px;"></td>
+<td style="background:#f9f9f9;padding:16px 32px 16px 20px;${borderBottom}">
+<p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:16px;font-weight:600;color:#111111;line-height:1.3;">&#128250; ${esc(a.title)}</p>
+<p style="margin:0;"><a href="${esc(watchUrl)}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:11px;color:${teamColor};text-decoration:none;">Watch &#8594;</a></p>
+</td></tr></table>`;
+};
+
 /** Light news day notice */
 const buildLightNewsDayNotice = (teamDisplayName: string): string =>
   `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
@@ -152,9 +165,16 @@ export const buildNewsletterHtml = (params: {
   const teamDisplayName = `${params.team.city} ${params.team.name}`;
   const dateStr = formatLongDate(new Date().toISOString());
 
-  const nonInjury = params.selectedArticles.filter((a) => a.category !== "injury");
+  // Separate video_link items from scoreable text articles.
+  // Text articles fill Quick Hit slots first; video fills a remaining slot (max 1).
+  const nonInjury = params.selectedArticles.filter(
+    (a) => a.category !== "injury" && a.category !== "video_link",
+  );
   const lead = nonInjury[0];
-  const quick = nonInjury.slice(1, 5);
+  const textQuick = nonInjury.slice(1, 5);
+  const videoItems = params.selectedArticles.filter((a) => a.category === "video_link");
+  const videoHit = textQuick.length < 4 ? (videoItems[0] ?? null) : null;
+  const quick = textQuick; // text articles only
   const injuries = params.selectedArticles.filter((a) => a.category === "injury");
   const statData = extractStat(params.pipelineNotes);
 
@@ -176,12 +196,17 @@ export const buildNewsletterHtml = (params: {
     bodyBlocks.push(buildTopStory(lead, teamColor));
   }
 
-  // Quick Hits
-  if (quick.length > 0) {
+  // Quick Hits — text articles first, optional video item fills remaining slot
+  const totalQuick = quick.length + (videoHit ? 1 : 0);
+  if (totalQuick > 0) {
     bodyBlocks.push(sectionLabel("QUICK HITS", teamColor));
     quick.forEach((a, i) => {
-      bodyBlocks.push(buildQuickHit(a, teamColor, i === quick.length - 1));
+      const isLast = i === quick.length - 1 && !videoHit;
+      bodyBlocks.push(buildQuickHit(a, teamColor, isLast));
     });
+    if (videoHit) {
+      bodyBlocks.push(buildVideoHit(videoHit, teamColor, true));
+    }
   }
 
   // Injury Report
