@@ -58,6 +58,10 @@ const bundles = [
     entry: join(root, "server/vercel/admin/revalidate-source.ts"),
     outfile: join(root, "api/admin/revalidate-source.js"),
   },
+  {
+    entry: join(root, "server/vercel/admin/pipeline-health.ts"),
+    outfile: join(root, "api/admin/pipeline-health.js"),
+  },
 ];
 
 for (const { entry, outfile } of bundles) {

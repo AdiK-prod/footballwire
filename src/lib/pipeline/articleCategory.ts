@@ -5,7 +5,8 @@ export type ArticleCategory =
   | "injury"
   | "game_analysis"
   | "rumor"
-  | "general";
+  | "general"
+  | "video_link";
 
 export const COMPOSITE_BY_CATEGORY: Record<ArticleCategory, number> = {
   transaction: 85,
@@ -13,6 +14,7 @@ export const COMPOSITE_BY_CATEGORY: Record<ArticleCategory, number> = {
   game_analysis: 70,
   rumor: 60,
   general: 50,
+  video_link: 0, // video items are not scored — they fill slots only when text < 4
 };
 
 export const getCompositeForCategory = (category: ArticleCategory): number =>

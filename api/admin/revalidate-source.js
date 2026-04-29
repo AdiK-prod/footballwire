@@ -13939,7 +13939,8 @@ var validateSourceInputSchema = external_exports.object({
   url: external_exports.string().url(),
   teamId: external_exports.number().int().positive().nullable(),
   sourceType: external_exports.enum(["general", "team_specific", "user_submitted"]),
-  submittedBy: external_exports.string().min(1).default("system")
+  submittedBy: external_exports.string().min(1).default("system"),
+  feedType: external_exports.enum(["news", "blog"]).default("news")
 }).superRefine((value, ctx) => {
   if (value.sourceType !== "general" && value.teamId === null) {
     ctx.addIssue({

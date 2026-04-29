@@ -341,3 +341,119 @@ export const getSubscriberStatsByTeam = async (): Promise<TeamSubscriberStat[]> 
 
   return results.sort((a, b) => b.active_subscribers - a.active_subscribers);
 };
+
+// ─── Pipeline Health ────────────────────────────────────────────────────────
+
+export type PipelineHealthRow = {
+  team_id: number;
+  team_city: string;
+  team_name: string;
+  run_at: string;
+  status: "partial" | "completed" | "failed";
+  articles_selected: number;
+  newsletter_sent: boolean;
+  notes: string | null;
+};
+
+/**
+ * Returns the most recent pipeline_runs row per active team.
+ * Used by the Pipeline Health Status Bar in the admin dashboard.
+ */
+export const getLatestPipelineRunsPerTeam = async (): Promise<PipelineHealthRow[]> => {
+  const supabase = getServiceRoleClient();
+
+  // 1. Get active teams
+  const { data: activeSubs, error: subsError } = await supabase
+    .from("subscribers")
+    .select("team_id")
+    .eq("is_active", true);
+
+  if (subsError) {
+    throw new Error(`active teams query failed: ${subsError.message}`);
+  }
+
+  const activeTeamIds = [...new Set((activeSubs ?? []).map((r) => r.team_id as number))];
+  if (activeTeamIds.length === 0) return [];
+
+  // 2. Get team names
+  const { data: teams, error: teamsError } = await supabase
+    .from("teams")
+    .select("id, city, name")
+    .in("id", activeTeamIds);
+
+  if (teamsError) {
+    throw new Error(`teams query failed: ${teamsError.message}`);
+  }
+  const teamMap = new Map<number, { city: string; name: string }>();
+  for (const t of teams ?? []) {
+    teamMap.set(t.id as number, { city: t.city as string, name: t.name as string });
+  }
+
+  // 3. Get latest pipeline run per active team
+  const { data: runs, error: runsError } = await supabase
+    .from("pipeline_runs")
+    .select("id, team_id, run_at, status, articles_selected, notes")
+    .in("team_id", activeTeamIds)
+    .order("run_at", { ascending: false })
+    .limit(activeTeamIds.length * 5);
+
+  if (runsError) {
+    throw new Error(`pipeline_runs query failed: ${runsError.message}`);
+  }
+
+  // Keep only the most recent run per team
+  const latestByTeam = new Map<number, (typeof runs)[number]>();
+  for (const run of runs ?? []) {
+    const tid = run.team_id as number;
+    if (!latestByTeam.has(tid)) {
+      latestByTeam.set(tid, run);
+    }
+  }
+
+  // 4. Check newsletter send status for each run
+  const runIds = [...latestByTeam.values()].map((r) => r.id as number);
+  const sentRunIds = new Set<number>();
+
+  if (runIds.length > 0) {
+    // We determine "sent" by checking if a newsletter exists with status=sent
+    // for the same team on or after the run_at date
+    const { data: newsletters } = await supabase
+      .from("newsletters")
+      .select("team_id, status, sent_at")
+      .eq("status", "sent")
+      .in("team_id", activeTeamIds);
+
+    const runAtByTeam = new Map<number, string>();
+    for (const [tid, run] of latestByTeam.entries()) {
+      runAtByTeam.set(tid, run.run_at as string);
+    }
+
+    for (const nl of newsletters ?? []) {
+      const tid = nl.team_id as number;
+      const runAt = runAtByTeam.get(tid);
+      if (runAt && nl.sent_at && nl.sent_at >= runAt) {
+        // Find the run id for this team
+        const run = latestByTeam.get(tid);
+        if (run) sentRunIds.add(run.id as number);
+      }
+    }
+  }
+
+  const results: PipelineHealthRow[] = [];
+  for (const [teamId, run] of latestByTeam.entries()) {
+    const team = teamMap.get(teamId);
+    if (!team) continue;
+    results.push({
+      team_id: teamId,
+      team_city: team.city,
+      team_name: team.name,
+      run_at: run.run_at as string,
+      status: run.status as "partial" | "completed" | "failed",
+      articles_selected: (run.articles_selected as number) ?? 0,
+      newsletter_sent: sentRunIds.has(run.id as number),
+      notes: run.notes as string | null,
+    });
+  }
+
+  return results.sort((a, b) => new Date(b.run_at).getTime() - new Date(a.run_at).getTime());
+};

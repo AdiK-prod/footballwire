@@ -19,6 +19,7 @@ export const createPendingSource = async (params: {
   teamId: number | null;
   type: SourceType;
   submittedBy: string;
+  feedType?: "news" | "blog";
 }) => {
   const supabase = getServiceRoleClient();
 
@@ -32,6 +33,7 @@ export const createPendingSource = async (params: {
       paywall_rate: 0,
       name: new URL(params.url).hostname,
       submitted_by: params.submittedBy,
+      feed_type: params.feedType ?? "news",
     })
     .select("id, team_id, url, name, type, status, relevance_score, feed_type")
     .single<SourceRecord>();

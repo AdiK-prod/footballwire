@@ -60,6 +60,7 @@ describe("validateSourceWithDeps", () => {
     teamId: 1,
     sourceType: "team_specific" as const,
     submittedBy: "qa@test.local",
+    feedType: "news" as const,
   };
 
   const baseDeps = {

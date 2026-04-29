@@ -8,7 +8,7 @@ a curated 5-minute morning briefing every day.
 - Sending: newsletter@mail.footballwire.uk
 - Subscriber app: footballwire.uk
 - Admin dashboard: footballwire.uk/admin
-- PRD: prd_v3.md
+- PRD: prd_v5.md
 - Backlog: BACKLOG.md
 
 ---
@@ -25,7 +25,7 @@ a curated 5-minute morning briefing every day.
 
 ## Current Phase
 
-Phases 1–4 complete. Phase 5 (Admin Dashboard) — next.
+Phase 5 — Admin Dashboard (in progress — pipeline health bar + add source form pending)
 
 Update this line when a phase is confirmed complete by the user.
 
@@ -39,7 +39,7 @@ Mark each task [x] in BACKLOG.md immediately upon completion.
 Move completed tasks to the Completed section in BACKLOG.md.
 
 **When the phase is fully complete:**
-1. Verify every DoD checkbox in prd_v3.md for that phase
+1. Verify every DoD checkbox in prd_v5.md for that phase
 2. For checkboxes that can be verified programmatically (migrations ran, indexes exist, build passes) — verify and mark them
 3. For checkboxes that require human confirmation (app runs locally, Vercel deployed, email renders) — list them explicitly and wait
 4. Report a clear summary of what was built
@@ -57,7 +57,7 @@ Move completed tasks to the Completed section in BACKLOG.md.
 - Routine file creation, component building, schema migrations
 - Stylistic or naming decisions already covered by rules in this file
 - Test failures that are fixable — fix and continue
-- Decisions already answered by CLAUDE.md or prd_v3.md
+- Decisions already answered by CLAUDE.md or prd_v5.md
 - Display bugs discovered mid-task — fix them and continue
 
 ---
@@ -92,6 +92,13 @@ Move completed tasks to the Completed section in BACKLOG.md.
 - All admin list views paginated — max 50 rows default
 - Admin API response target < 500ms p95
 
+**vercel.json SPA Rewrite Rule**
+The catch-all SPA rewrite in vercel.json MUST exclude /api/* paths:
+  `"source": "/(?!api/).*"`
+Never use `"/(.*)"` without the api exclusion.
+Every new API route added must be verified against this pattern.
+POST requests to new /api/* endpoints will silently 405 without this exclusion.
+
 ---
 
 ## Database Rules
@@ -111,6 +118,26 @@ Move completed tasks to the Completed section in BACKLOG.md.
   → Never write per-article mid-pipeline — accumulate in memory, flush once
 - pipeline_runs row: created at start (status: partial), closed at end (completed | failed)
 - Failure path always closes pipeline_runs row with status: failed + error message
+
+**String Sanitization Rule**
+All Claude-generated strings must be sanitized before any DB write.
+Use `sanitizeForDb()` from `src/lib/utils/sanitizeString.ts` on:
+- selection_reasoning
+- rejection_reason
+- ai_summary
+- headline
+- notes / any other Claude text output
+Raw control characters (`\n`, `\r`, `\t`, null bytes) in stored strings
+corrupt the Supabase SDK JSON parser and crash the pipeline.
+
+**Blog Feed Rule**
+Sources with `feed_type = blog`: use `content:encoded` from RSS directly.
+Never HTTP scrape blog source article URLs.
+Decode HTML entities with `he.decode()` before Claude calls or DB writes.
+Classify blog items before processing:
+- Text item (>= 200 words after decode + strip): proceed to relevance check
+- Video item (empty or YouTube embed only): skip Claude, category = video_link
+  Store: title, original_url, youtube_url, source_id in articles table
 
 **Step 2 Filter — relevance gate (v3 requirement):**
 - Non-NFL keyword pre-filter on title: discard if title contains ufl, mls, mlb, nba, nhl, golf, soccer, tennis, cricket, college football, ncaa
@@ -138,6 +165,17 @@ The `checkTeamRelevance` call IS a Claude API call (relevance gate, not scoring)
 - Quick hits: next 4 non-injury articles (total 5 articles including lead)
 - Injury block: all injury-tagged articles
 - Stat of the Day: from fetched articles only — never freely generated
+
+---
+
+## Newsletter Content Rules
+
+- Quick Hits: text articles fill slots first, video items fill remaining slots only
+- Maximum one video item per newsletter — never two
+- Video items from blog sources only — general news sources never produce video
+- Video item render: title + watch link — no summary, no score
+- Unsubscribe is per-subscription (email + team_id) — not per email address
+- One subscriber following 3 teams gets 3 separate emails daily
 
 ---
 

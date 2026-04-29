@@ -19,6 +19,7 @@ import {
 import {
   classifyBlogItem,
   cleanBlogContent,
+  extractYouTubeUrl,
   fetchLatestRssItems,
 } from "./fetchRssItems";
 import type { ArticleUpsertPayload, ScoreLogPayload } from "./persistTeamRun";
@@ -53,6 +54,14 @@ type Enriched = {
 };
 
 type EnrichedRanked = Enriched & { sourceId: number };
+
+type VideoCandidate = {
+  source: ApprovedSourceRow;
+  title: string;
+  link: string;
+  publishedAt: string;
+  youtubeUrl: string | null;
+};
 
 const pipelineInfo = (msg: string, extra?: Record<string, unknown>) => {
   console.info(JSON.stringify({ scope: "pipeline", msg, ...extra }));
@@ -198,6 +207,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
   let scoredCount = 0;
 
   const attempts: Enriched[] = [];
+  const videoCandidates: VideoCandidate[] = [];
 
   let runId = 0;
   let pipelineSucceeded = false;
@@ -276,9 +286,16 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
           });
 
           if (blogType === "video") {
-            // Video items have no summarisable text — skip entirely
-            articlesFetched -= 1;
-            pipelineInfo("blog_video_skipped", { teamId, sourceId: source.id, url: item.link });
+            // Store as a video candidate — may fill a Quick Hit slot if < 4 text articles
+            articlesFetched -= 1; // not counted as a standard article fetch
+            videoCandidates.push({
+              source,
+              title: item.title,
+              link: item.link,
+              publishedAt: new Date(item.pubDate).toISOString(),
+              youtubeUrl: extractYouTubeUrl(item.contentEncoded ?? ""),
+            });
+            pipelineInfo("blog_video_candidate", { teamId, sourceId: source.id, url: item.link });
             continue;
           }
 
@@ -483,6 +500,13 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
     const quick = diversified.slice(1, 5);
     const injuries = kept.filter((k) => k.category === "injury");
 
+    // One video item fills a remaining Quick Hit slot when text articles < 4.
+    // Video items never displace text articles. Max 1 video per newsletter.
+    const selectedVideo: VideoCandidate | null =
+      quick.length < 4 && videoCandidates.length > 0
+        ? (videoCandidates[0] ?? null)
+        : null;
+
     const toSummarize: Enriched[] = [];
     const seen = new Set<string>();
     const pushUnique = (e: Enriched | undefined) => {
@@ -567,9 +591,35 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
       pipelineInfo("stat_snippet", { teamId, statLine: statHit.snippet });
     }
 
+    // Persist the selected video candidate (if any) alongside text articles.
+    if (selectedVideo) {
+      articlesPayload.push({
+        source_id: selectedVideo.source.id,
+        team_id: teamId,
+        title: selectedVideo.title,
+        original_url: selectedVideo.link,
+        raw_content: null,
+        ai_summary: null,
+        published_at: selectedVideo.publishedAt,
+        category: "video_link",
+        composite_score: null,
+        relevance_score: null,
+        significance_score: null,
+        credibility_score: null,
+        uniqueness_score: null,
+        selection_reasoning: "Selected: video_link (blog source)",
+        rejection_reason: null,
+        passed_threshold: true,
+        summary_version: 1,
+        word_count: 0,
+        youtube_url: selectedVideo.youtubeUrl,
+      });
+      urlToSourceName.set(selectedVideo.link, selectedVideo.source.name ?? "");
+    }
+
     const articlesSelected = toSummarize.filter(
       (x) => x.passedQuality && x.relevantToTeam,
-    ).length;
+    ).length + (selectedVideo ? 1 : 0);
 
     const urlToId = await upsertArticlesAndInsertScoreLogs(supabase, {
       articles: articlesPayload,
@@ -589,6 +639,7 @@ export const runTeamPipeline = async (teamId: number): Promise<void> => {
               source_name: urlToSourceName.get(a.original_url) ?? "",
               category: a.category as ArticleCategory,
               published_at: a.published_at,
+              youtube_url: a.youtube_url ?? null,
             }))
             .filter((a) => a.id > 0),
           pipelineNotes: statHit

@@ -16,6 +16,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.102.1",
     "@vercel/node": "^5.7.4",
+    "he": "^1.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.2",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
+    "@types/he": "^1.2.3",
     "@types/node": "^25.5.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

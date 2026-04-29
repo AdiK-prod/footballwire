@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sanitizeForDb } from "../utils/sanitizeString";
 
 export type ArticleUpsertPayload = {
   source_id: number;
@@ -25,6 +26,7 @@ export type ArticleUpsertPayload = {
   passed_threshold: boolean;
   summary_version: number;
   word_count: number | null;
+  youtube_url?: string | null;
 };
 
 export type ScoreLogPayload = {
@@ -67,10 +69,10 @@ export const upsertArticlesAndInsertScoreLogs = async (
         params.articles.map((a) => ({
           source_id: a.source_id,
           team_id: a.team_id,
-          title: a.title,
+          title: sanitizeForDb(a.title),
           original_url: a.original_url,
-          raw_content: a.raw_content,
-          ai_summary: a.ai_summary,
+          raw_content: a.raw_content ? sanitizeForDb(a.raw_content) : null,
+          ai_summary: a.ai_summary ? sanitizeForDb(a.ai_summary) : null,
           published_at: a.published_at,
           category: a.category,
           composite_score: a.composite_score,
@@ -78,11 +80,12 @@ export const upsertArticlesAndInsertScoreLogs = async (
           significance_score: a.significance_score,
           credibility_score: a.credibility_score,
           uniqueness_score: a.uniqueness_score,
-          selection_reasoning: a.selection_reasoning,
-          rejection_reason: a.rejection_reason,
+          selection_reasoning: a.selection_reasoning ? sanitizeForDb(a.selection_reasoning) : null,
+          rejection_reason: a.rejection_reason ? sanitizeForDb(a.rejection_reason) : null,
           passed_threshold: a.passed_threshold,
           summary_version: a.summary_version,
           word_count: a.word_count,
+          youtube_url: a.youtube_url ?? null,
         })),
         { onConflict: "original_url" },
       )
@@ -100,6 +103,9 @@ export const upsertArticlesAndInsertScoreLogs = async (
   const logsResolved = params.logs.map((log) => ({
     ...log,
     article_id: log.article_id ?? urlToId.get(log.original_url) ?? null,
+    headline: sanitizeForDb(log.headline),
+    selection_reasoning: log.selection_reasoning ? sanitizeForDb(log.selection_reasoning) : null,
+    rejection_reason: log.rejection_reason ? sanitizeForDb(log.rejection_reason) : null,
   }));
 
   if (logsResolved.length === 0) {

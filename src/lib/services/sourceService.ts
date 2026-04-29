@@ -18,6 +18,7 @@ const validateSourceInputSchema = z
     teamId: z.number().int().positive().nullable(),
     sourceType: z.enum(["general", "team_specific", "user_submitted"]),
     submittedBy: z.string().min(1).default("system"),
+    feedType: z.enum(["news", "blog"]).default("news"),
   })
   .superRefine((value, ctx) => {
     if (value.sourceType !== "general" && value.teamId === null) {
@@ -119,6 +120,7 @@ export const validateSourceWithDeps = async (
     teamId: input.teamId,
     type: input.sourceType,
     submittedBy: input.submittedBy,
+    feedType: input.feedType,
   });
 
   let sample: ValidationResult["parserSample"] | undefined;

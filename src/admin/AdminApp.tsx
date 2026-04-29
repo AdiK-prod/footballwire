@@ -5,6 +5,7 @@ import { getBrowserClient } from "@/lib/supabase/browser";
 import { SourceQueueTab } from "./SourceQueueTab";
 import { ContentPreviewTab } from "./ContentPreviewTab";
 import { SubscribersTab } from "./SubscribersTab";
+import { PipelineHealthBar } from "./PipelineHealthBar";
 
 type AdminTab = "sources" | "content" | "subscribers";
 
@@ -102,6 +103,9 @@ export const AdminApp = () => {
           </div>
         </div>
       </nav>
+
+      {/* Pipeline health status bar — persists across all tabs */}
+      <PipelineHealthBar accessToken={accessToken} />
 
       {/* Tab content */}
       <main className="mx-auto max-w-[1100px] px-6 py-8">
