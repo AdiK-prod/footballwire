@@ -93,11 +93,11 @@ Move completed tasks to the Completed section in BACKLOG.md.
 - Admin API response target < 500ms p95
 
 **vercel.json SPA Rewrite Rule**
-The catch-all SPA rewrite in vercel.json MUST exclude /api/* paths:
-  `"source": "/(?!api/).*"`
-Never use `"/(.*)"` without the api exclusion.
-Every new API route added must be verified against this pattern.
-POST requests to new /api/* endpoints will silently 405 without this exclusion.
+Vercel routes serverless functions (all `/api/**` paths) before evaluating rewrite rules,
+so a catch-all SPA rewrite `"source": "/(.*)"` is safe — API routes are never captured.
+Do not use regex lookaheads in Vercel source patterns; Vercel does not support them.
+The correct pattern:
+  `{ "source": "/(.*)", "destination": "/index.html" }`
 
 ---
 
