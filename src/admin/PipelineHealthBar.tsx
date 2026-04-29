@@ -85,24 +85,28 @@ export const PipelineHealthBar = ({ accessToken }: Props) => {
 
   if (loading) {
     return (
-      <div className="border-b border-fw-border bg-[#f8f8f8] px-6 py-2">
-        <p className="text-[11px] text-fw-ink-faint">Loading pipeline status…</p>
+      <div className="border-t border-fw-border bg-[#fafafa] px-6 py-1.5">
+        <div className="mx-auto max-w-[1100px]">
+          <p className="text-[11px] text-fw-ink-faint">Checking pipeline…</p>
+        </div>
       </div>
     );
   }
 
   if (runs.length === 0) {
     return (
-      <div className="border-b border-fw-border bg-[#f8f8f8] px-6 py-2">
-        <p className="text-[11px] text-fw-ink-faint">No pipeline runs found</p>
+      <div className="border-t border-fw-border bg-[#fafafa] px-6 py-1.5">
+        <div className="mx-auto max-w-[1100px]">
+          <p className="text-[11px] text-fw-ink-faint">No pipeline runs yet</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="border-b border-fw-border bg-[#f8f8f8]">
-      <div className="mx-auto max-w-[1100px] px-6 py-2">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+    <div className="border-t border-fw-border bg-[#fafafa]">
+      <div className="mx-auto max-w-[1100px] px-6 py-1.5">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-0.5">
           <span className="text-[10px] font-semibold uppercase tracking-[2px] text-fw-ink-faint shrink-0">
             Pipeline
           </span>

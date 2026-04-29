@@ -63,16 +63,20 @@ export const AdminApp = () => {
 
   return (
     <div className="min-h-screen bg-fw-white">
-      {/* Top nav */}
-      <nav className="sticky top-0 z-10 border-b border-fw-border bg-fw-white">
+      {/* Sticky top nav — wordmark + tabs + pipeline health */}
+      <nav className="sticky top-0 z-20 bg-fw-white" style={{ boxShadow: "0 1px 0 #e8e8e8, 0 2px 8px 0 rgba(0,0,0,0.06)" }}>
+        {/* Wordmark row */}
         <div className="mx-auto flex max-w-[1100px] items-center justify-between px-6 py-3">
           <p className="text-[12px] font-bold uppercase tracking-[3px] text-fw-ink">
-            FOOTBALLWIRE <span className="ml-1 text-fw-ink-faint font-normal normal-case tracking-normal">Admin</span>
+            FOOTBALLWIRE
+            <span className="ml-2 text-[11px] font-normal normal-case tracking-normal text-fw-ink-faint">
+              Admin
+            </span>
           </p>
           <button
             type="button"
             onClick={handleLogout}
-            className="rounded-lg border border-fw-border px-3 py-1.5 text-[12px] text-fw-ink-muted transition-colors hover:border-fw-border-mid hover:text-fw-ink"
+            className="rounded-md border border-fw-border px-3 py-1.5 text-[12px] text-fw-ink-muted transition-colors hover:border-fw-border-mid hover:text-fw-ink"
           >
             Sign out
           </button>
@@ -102,10 +106,10 @@ export const AdminApp = () => {
             })}
           </div>
         </div>
-      </nav>
 
-      {/* Pipeline health status bar — persists across all tabs */}
-      <PipelineHealthBar accessToken={accessToken} />
+        {/* Pipeline health bar — stays pinned inside the nav */}
+        <PipelineHealthBar accessToken={accessToken} />
+      </nav>
 
       {/* Tab content */}
       <main className="mx-auto max-w-[1100px] px-6 py-8">

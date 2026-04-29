@@ -24,25 +24,25 @@ const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }
   rejected: { bg: "#fff5f5", border: "#fecaca", text: "#dc2626" },
 };
 
-const StatCard = ({
-  label,
-  value,
-  color,
+const StatStrip = ({
+  items,
 }: {
-  label: string;
-  value: number;
-  color: string;
+  items: { label: string; value: number; color: string }[];
 }) => (
-  <div
-    className="rounded-xl border p-5"
-    style={{ borderColor: color === "#d97706" ? "#fde68a" : color === "#dc2626" ? "#fecaca" : "#e8e8e8" }}
-  >
-    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[2px]" style={{ color }}>
-      {label}
-    </p>
-    <p className="text-[30px] font-bold" style={{ color: "#111111" }}>
-      {value}
-    </p>
+  <div className="flex items-center gap-6">
+    {items.map(({ label, value, color }) => (
+      <div key={label} className="flex items-baseline gap-2">
+        <span className="text-[28px] font-bold leading-none" style={{ color: "#111111" }}>
+          {value}
+        </span>
+        <span
+          className="text-[10px] font-semibold uppercase tracking-[2px]"
+          style={{ color }}
+        >
+          {label}
+        </span>
+      </div>
+    ))}
   </div>
 );
 
@@ -489,12 +489,14 @@ export const SourceQueueTab = ({ accessToken }: Props) => {
         />
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Pending" value={pending} color="#d97706" />
-        <StatCard label="Flagged" value={flagged} color="#dc2626" />
-        <StatCard label="Total shown" value={sources.length} color="#888888" />
-      </div>
+      {/* Stat strip */}
+      <StatStrip
+        items={[
+          { label: "Pending", value: pending, color: "#d97706" },
+          { label: "Flagged", value: flagged, color: "#dc2626" },
+          { label: "Total shown", value: sources.length, color: "#888888" },
+        ]}
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 rounded-xl border border-fw-border bg-fw-card p-4">
